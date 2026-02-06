@@ -1,0 +1,2572 @@
+<!DOCTYPE html>
+<html lang="es" data-color-scheme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analyzer 2.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* ... (Estilos CSS sin cambios - omitidos por brevedad) ... */
+        :root {
+            --bg-primary: #13161C;
+            --bg-secondary: #1E2128;
+            --bg-panels: #2A2D35;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B0B0B0;
+            --accent: #0AE98A;
+            --marker-purple: #9747FF;
+            --marker-blue: #4A9EFF;
+            --marker-peach: #FF8A65;
+            --marker-pink: #FF4081;
+            --marker-contrast: #FFB74D;
+            --marker-centering: #40E0D0;
+            --marker-black-frame: #888888;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --critical-color: #FF4444;
+            --success-color: #0AE98A;
+            --warning-color: #FFB74D;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4B5563;
+            border-radius: 4px;
+        }
+
+        .file-drop-zone {
+            border: 2px dashed var(--border-color);
+            transition: all 300ms ease-in-out;
+            background-color: var(--bg-panels);
+        }
+
+        .file-drop-zone.dragover {
+            border-color: var(--accent);
+            background-color: rgba(10, 233, 138, 0.1);
+        }
+
+        .main-content>div {
+            display: none;
+            animation: fadeIn 700ms ease-in-out;
+        }
+
+        .main-content>div.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .report-item:hover {
+            background-color: var(--bg-secondary);
+        }
+
+        .nav-link.active {
+            background-color: rgba(10, 233, 138, 0.1);
+            color: var(--accent);
+        }
+
+        .filter-btn {
+            transition: all 200ms ease;
+            border: 1px solid var(--btn-color, var(--border-color));
+            color: var(--btn-color, var(--text-secondary));
+            background-color: transparent;
+        }
+
+        .filter-btn:not(.active):hover {
+            opacity: 0.7;
+        }
+
+        .filter-btn.active {
+            background-color: var(--btn-color, var(--accent)) !important;
+            color: var(--bg-primary) !important;
+            opacity: 1 !important;
+        }
+
+        .loader {
+            border-top-color: var(--accent);
+            animation: spin 1s linear infinite;
+        }
+
+        .loader-text {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        #sidebar {
+            transition: width 300ms ease-in-out;
+        }
+
+        #sidebar.collapsed {
+            width: 80px;
+        }
+
+        #sidebar.collapsed .nav-text,
+        #sidebar.collapsed .sidebar-title,
+        #sidebar.collapsed .status-text {
+            display: none;
+        }
+
+        #sidebar.collapsed .nav-link,
+        #sidebar.collapsed #logout-button,
+        #sidebar.collapsed #sidebar-toggle,
+        #sidebar.collapsed #backend-status {
+            justify-content: center;
+        }
+
+        #sidebar.collapsed .nav-link i,
+        #sidebar.collapsed #logout-button i,
+        #sidebar.collapsed #sidebar-toggle i,
+        #sidebar.collapsed #backend-status i {
+            margin-right: 0;
+        }
+
+        #resizer {
+            cursor: col-resize;
+        }
+
+        .analysis-btn {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            transition: all 200ms ease;
+        }
+
+        .analysis-btn.active {
+            color: var(--bg-primary);
+            background-color: var(--cat-color);
+            border-color: var(--cat-color);
+        }
+
+        .depth-btn.active {
+            background-color: var(--accent) !important;
+            /* Importante para sobreescribir estilos base */
+            color: var(--bg-primary) !important;
+            border-color: var(--accent) !important;
+        }
+
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .toggle-switch-input {
+            height: 0;
+            width: 0;
+            visibility: hidden;
+        }
+
+        .toggle-switch-label {
+            width: 40px;
+            height: 22px;
+            background: var(--bg-secondary);
+            display: block;
+            border-radius: 100px;
+            position: relative;
+        }
+
+        .toggle-switch-label::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 90px;
+            transition: 0.2s;
+        }
+
+        .toggle-switch-input:checked+.toggle-switch-label {
+            background: var(--accent);
+        }
+
+        .toggle-switch-input:checked+.toggle-switch-label::after {
+            left: calc(100% - 2px);
+            transform: translateX(-100%);
+        }
+
+        .slider-label {
+            color: var(--text-secondary);
+        }
+
+        .slider-value {
+            color: var(--accent);
+        }
+
+        .file-list-item {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .file-list-item .remove-file-btn {
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+
+        .file-list-item .remove-file-btn:hover {
+            color: var(--critical-color);
+            opacity: 1;
+        }
+
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: var(--bg-panels);
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            right: 0;
+            border-radius: 0.5rem;
+        }
+
+        .dropdown-content a {
+            color: var(--text-primary);
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            font-size: 0.875rem;
+        }
+
+        .dropdown-content a:hover {
+            background-color: var(--bg-secondary);
+        }
+
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        .video-queue-item.active {
+            border-left-color: var(--accent);
+            background-color: var(--bg-primary);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.6);
+        }
+
+        .modal-content {
+            background-color: var(--bg-panels);
+            margin: 15% auto;
+            padding: 24px;
+            border-radius: 0.5rem;
+            max-width: 500px;
+            border-top: 4px solid var(--critical-color);
+        }
+
+        .modal-content.status-warning {
+            border-top-color: var(--warning-color);
+        }
+
+        .modal-content.status-success {
+            border-top-color: var(--success-color);
+        }
+
+        .task-loader {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .task-loader .task-status {
+            display: flex;
+            align-items: center;
+        }
+
+        .task-loader .task-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+        }
+
+        .task-loader .task-icon .loader {
+            width: 16px;
+            height: 16px;
+            border-width: 2px;
+        }
+
+        .task-loader.task-done {
+            color: var(--text-primary);
+        }
+
+        .task-loader.task-done .task-status {
+            color: var(--accent);
+        }
+
+        /* Timeline Markers */
+        .timeline-container {
+            position: relative;
+            height: 24px;
+            background-color: var(--bg-secondary);
+            border-radius: 4px;
+            margin-top: 8px;
+            cursor: pointer;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            top: 2px;
+            width: 6px;
+            height: 20px;
+            border-radius: 2px;
+            cursor: pointer;
+            transition: all 200ms ease-in-out;
+            opacity: 0.8;
+        }
+
+        .timeline-marker:hover {
+            opacity: 1;
+            transform: scaleY(1.2);
+            z-index: 10;
+        }
+
+        .timeline-marker.active {
+            opacity: 1;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        /* Video player fijo */
+        .video-player-fixed {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        /* Toggle autoplay */
+        .autoplay-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .autoplay-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent);
+        }
+    </style>
+</head>
+
+<body class="antialiased">
+    <div id="loading-screen" class="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center hidden">
+        <div class="p-8 rounded-lg" style="background-color: var(--bg-panels);">
+            <h3 id="loading-title" class="text-2xl font-bold mb-6 text-center">Analizando video_01.mp4</h3>
+            <div class="space-y-3 w-80">
+                <div id="task-audio" class="task-loader">
+                    <span class="task-name">1. Análisis de Audio</span>
+                    <div class="task-status">
+                        <div class="task-icon">
+                            <div class="loader"></div>
+                        </div>
+                        <span class="task-message">Pendiente...</span>
+                    </div>
+                </div>
+                <div id="task-vision" class="task-loader">
+                    <span class="task-name">2. Análisis de Visión</span>
+                    <div class="task-status">
+                        <div class="task-icon">
+                            <div class="loader"></div>
+                        </div>
+                        <span class="task-message">Pendiente...</span>
+                    </div>
+                </div>
+                <div id="task-geometry" class="task-loader">
+                    <span class="task-name">3. Análisis de Geometría</span>
+                    <div class="task-status">
+                        <div class="task-icon">
+                            <div class="loader"></div>
+                        </div>
+                        <span class="task-message">Pendiente...</span>
+                    </div>
+                </div>
+                <div id="task-synthesis" class="task-loader">
+                    <span class="task-name">4. Síntesis</span>
+                    <div class="task-status">
+                        <div class="task-icon">
+                            <div class="loader"></div>
+                        </div>
+                        <span class="task-message">Pendiente...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="status-modal" class="modal">
+    </div>
+
+    <div id="app" class="flex h-screen">
+        <aside id="sidebar" class="w-64 p-4 flex-shrink-0 flex flex-col justify-between"
+            style="background-color: var(--bg-secondary);">
+            <div>
+                <div class="flex items-center justify-between mb-6">
+                    <h1 class="text-2xl font-bold sidebar-title">Analyzer 2.0</h1>
+                    <button id="sidebar-toggle" class="p-2 rounded-lg hover:bg-gray-700">
+                        <i data-lucide="chevrons-left" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <nav class="flex flex-col space-y-2">
+                    <a href="#" id="goto-welcome" class="nav-link flex items-center p-3 rounded-lg">
+                        <i data-lucide="home" class="w-5 h-5 mr-3"></i>
+                        <span class="nav-text">Inicio</span>
+                    </a>
+                    <a href="#" id="goto-video" class="nav-link flex items-center p-3 rounded-lg active">
+                        <i data-lucide="video" class="w-5 h-5 mr-3"></i>
+                        <span class="nav-text">Video</span>
+                    </a>
+                    <a href="#" id="goto-images" class="nav-link flex items-center p-3 rounded-lg">
+                        <i data-lucide="image" class="w-5 h-5 mr-3"></i>
+                        <span class="nav-text">Imágenes</span>
+                    </a>
+                    <a href="#" id="goto-history" class="nav-link flex items-center p-3 rounded-lg">
+                        <i data-lucide="history" class="w-5 h-5 mr-3"></i>
+                        <span class="nav-text">Historial</span>
+                    </a>
+                </nav>
+            </div>
+
+            <div class="border-t pt-4" style="border-color: var(--border-color);">
+                <div id="backend-status" class="flex items-center p-3 rounded-lg">
+                    <div id="status-dot" class="w-3 h-3 rounded-full mr-3"
+                        style="background-color: var(--success-color);"></div>
+                    <span class="nav-text status-text">Servidor Listo</span>
+                </div>
+                <a href="#" id="goto-settings" class="nav-link flex items-center p-3 rounded-lg">
+                    <i data-lucide="settings" class="w-5 h-5 mr-3"></i>
+                    <span class="nav-text">Configuración</span>
+                </a>
+                <a href="#" id="goto-status" class="nav-link flex items-center p-3 rounded-lg">
+                    <i data-lucide="activity" class="w-5 h-5 mr-3"></i>
+                    <span class="nav-text">Estado</span>
+                </a>
+                <a href="#" id="goto-synthesis-log" class="nav-link flex items-center p-3 rounded-lg">
+                    <i data-lucide="scroll-text" class="w-5 h-5 mr-3"></i>
+                    <span class="nav-text">Log Síntesis</span>
+                </a>
+                <button id="logout-button" class="w-full flex items-center p-3 rounded-lg hover:bg-gray-700">
+                    <i data-lucide="log-out" class="w-5 h-5 mr-3"></i>
+                    <span class="nav-text">Cerrar Sesión</span>
+                </button>
+            </div>
+        </aside>
+
+        <main id="main-content" class="flex-1 overflow-y-auto p-8 main-content">
+
+            <div id="login-screen" class="flex items-center justify-center h-full">
+                <div class="text-center p-8">
+                    <h1 class="text-4xl font-bold mb-4">Analyzer 2.0</h1>
+                    <p class="text-lg text-secondary mb-8">Conectando con el servidor backend...</p>
+
+                    <div class="max-w-md mx-auto mb-6 space-y-3">
+                        <input type="email" id="login-email" placeholder="Email"
+                            class="w-full p-3 rounded-lg text-sm"
+                            style="background-color: var(--bg-panels); border: 1px solid var(--border-color); color: var(--text-primary);">
+                        <input type="password" id="login-password" placeholder="Contraseña"
+                            class="w-full p-3 rounded-lg text-sm"
+                            style="background-color: var(--bg-panels); border: 1px solid var(--border-color); color: var(--text-primary);">
+                    </div>
+
+                    <div id="status-indicator"
+                        class="flex items-center justify-center space-x-3 p-4 rounded-lg max-w-md mx-auto"
+                        style="background-color: var(--bg-panels);">
+                        <div class="loader-container flex-shrink-0">
+                            <div class="loader w-6 h-6 rounded-full border-4 border-t-4 border-gray-700"></div>
+                        </div>
+                        <span id="status-text" class="text-lg text-left">Conectando...</span>
+                    </div>
+
+                    <button id="enter-app-btn" class="w-full max-w-md font-bold py-3 rounded-lg mt-8"
+                        style="background-color: var(--accent); color: var(--bg-primary); opacity: 0.5;" disabled>
+                        Cargando Modelos...
+                    </button>
+                </div>
+            </div>
+
+            <div id="welcome-screen">
+                <h1 class="text-3xl font-bold mb-2">Bienvenido a Analyzer 2.0</h1>
+                <p class="text-lg text-secondary mb-10">Selecciona un módulo para comenzar tu análisis.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+                    <a href="#" id="goto-video-btn"
+                        class="nav-module-card flex flex-col items-center justify-center p-8 rounded-lg text-center"
+                        style="background-color: var(--bg-panels); border: 1px solid var(--border-color); transition: all 200ms ease;">
+                        <i data-lucide="video" class="w-16 h-16 mb-4" style="color: var(--accent);"></i>
+                        <h3 class="text-2xl font-bold mb-2">Módulo de Video</h3>
+                        <p class="text-secondary">Analiza archivos de video (.mp4, .mov) en busca de errores de audio,
+                            visión y síntesis.</p>
+                    </a>
+
+                    <a href="#" id="goto-images-btn"
+                        class="nav-module-card flex flex-col items-center justify-center p-8 rounded-lg text-center"
+                        style="background-color: var(--bg-panels); border: 1px solid var(--border-color); transition: all 200ms ease;">
+                        <i data-lucide="image" class="w-16 h-16 mb-4" style="color: var(--accent);"></i>
+                        <h3 class="text-2xl font-bold mb-2">Módulo de Imágenes</h3>
+                        <p class="text-secondary">Analiza imágenes estáticas (.jpg, .png) en busca de errores de
+                            ortografía y geometría.</p>
+                    </a>
+                </div>
+            </div>
+
+            <div id="images-screen" class="h-full flex flex-col">
+                <h2 class="text-3xl font-bold mb-6 flex-shrink-0">Módulo de Análisis de Imágenes</h2>
+                <div class="flex flex-grow min-h-0 gap-6">
+
+                    <div class="flex-grow flex flex-col gap-6 overflow-y-auto">
+                        <!-- Dropzone -->
+                        <div id="image-drop-zone"
+                            class="file-drop-zone h-48 flex-shrink-0 flex items-center justify-center text-center p-8 rounded-lg">
+                            <div class="flex flex-col items-center">
+                                <i data-lucide="image-plus" class="w-16 h-16 mb-4 text-secondary"></i>
+                                <h3 class="text-xl font-bold">Arrastra tus imágenes aquí</h3>
+                                <p class="text-secondary mt-2">o haz clic para seleccionar (.jpg, .png, .webp)</p>
+                                <input type="file" id="image-file-input" class="hidden"
+                                    accept="image/jpeg,image/png,image/webp" multiple>
+                            </div>
+                        </div>
+
+                        <!-- Lista de imágenes -->
+                        <div id="image-list-panel" class="hidden rounded-lg p-4"
+                            style="background-color: var(--bg-panels);">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="text-lg font-bold">Imágenes a analizar</h4>
+                                <button id="clear-images-btn" class="text-sm text-secondary hover:text-red-400">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <div id="image-list" class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Panel lateral -->
+                    <div id="image-side-panel" class="flex-shrink-0 rounded-lg h-full flex flex-col"
+                        style="background-color: var(--bg-panels); width: 380px;">
+
+                        <!-- Setup de análisis -->
+                        <div id="image-analysis-setup" class="p-6 overflow-y-auto">
+                            <h3 class="text-xl font-bold mb-4">Panel de Análisis</h3>
+
+                            <div class="mt-4 mb-4">
+                                <p class="font-medium mb-3">Análisis a realizar:</p>
+                                <div id="image-analysis-types" class="flex flex-wrap gap-2">
+                                    <button class="analysis-btn active" data-label="ocr">Ortografía (OCR)</button>
+                                    <button class="analysis-btn active" data-label="contrast">Contraste (WCAG)</button>
+                                    <button class="analysis-btn active" data-label="centering">Centrado</button>
+                                    <button class="analysis-btn active" data-label="quantifier"
+                                        style="--cat-color: var(--accent);">Visual Quantifier (5-Axis)</button>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="font-medium mb-2 block">Palabras a excluir:</label>
+                                <input type="text" id="image-excluded-words" placeholder="palabra1, palabra2..."
+                                    class="w-full p-2 rounded-md text-sm"
+                                    style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+                            </div>
+
+                            <button id="start-image-analysis-btn" class="w-full font-bold py-3 rounded-lg mt-4"
+                                style="background-color: var(--accent); color: var(--bg-primary);" disabled>
+                                Analizar Imágenes
+                            </button>
+                        </div>
+
+                        <!-- Panel de reporte -->
+                        <div id="image-report-panel" class="hidden flex flex-col h-full">
+                            <div class="p-6 flex-shrink-0 flex justify-between items-center">
+                                <h4 class="text-lg font-bold">Resultados</h4>
+                                <button id="image-new-analysis-btn" class="text-sm flex items-center"
+                                    style="color: var(--accent);">
+                                    <i data-lucide="refresh-cw" class="w-4 h-4 mr-1"></i>Nuevo
+                                </button>
+                            </div>
+                            <div id="image-report-items" class="flex-grow overflow-y-auto px-6 pb-6 space-y-3">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="video-screen" class="h-full flex flex-col">
+                <h2 class="text-3xl font-bold mb-6 flex-shrink-0">Módulo de Análisis de Video</h2>
+                <div class="flex flex-grow min-h-0 gap-6">
+
+                    <div class="flex-grow flex flex-col gap-6">
+                        <div id="video-drop-zone"
+                            class="file-drop-zone h-64 flex-shrink-0 flex items-center justify-center text-center p-8 rounded-lg">
+                            <div class="flex flex-col items-center">
+                                <i data-lucide="upload-cloud" class="w-16 h-16 mb-4 text-secondary"></i>
+                                <h3 class="text-xl font-bold">Arrastra tus archivos de video aquí</h3>
+                                <p class="text-secondary mt-2">o haz clic para seleccionar (.mp4, .mov)</p>
+                                <input type="file" id="video-file-input" class="hidden"
+                                    accept="video/mp4,video/quicktime" multiple>
+                            </div>
+                        </div>
+
+                        <div id="video-player-container"
+                            class="hidden rounded-lg overflow-hidden flex flex-col video-player-fixed"
+                            style="background-color: var(--bg-panels); max-height: 60vh;">
+                            <video id="video-player" class="w-full" style="max-height: 45vh; object-fit: contain;"
+                                controls></video>
+                            <!-- Timeline Markers -->
+                            <div id="timeline-container" class="timeline-container mx-4 my-2">
+                                <div id="timeline-markers"></div>
+                            </div>
+                            <div class="p-3 flex-shrink-0 flex justify-between items-center"
+                                style="background-color: var(--bg-secondary);">
+                                <h4 id="video-filename" class="font-medium text-lg truncate">video_01.mp4</h4>
+                                <label class="autoplay-toggle">
+                                    <input type="checkbox" id="autoplay-toggle" checked>
+                                    <span>Autoplay al clic</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="video-queue-panel" class="hidden flex-shrink-0"
+                            style="background-color: var(--bg-panels); border-radius: 0.5rem; padding: 1.5rem;">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="text-lg font-bold">Cola de Análisis</h4>
+                                <button id="add-more-videos-btn" class="text-sm flex items-center"
+                                    style="color: var(--accent);">
+                                    <i data-lucide="plus" class="w-4 h-4 mr-1"></i>Añadir más
+                                </button>
+                            </div>
+                            <div id="video-queue-list" class="overflow-y-auto max-h-48 space-y-2">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="resizer" class="flex-shrink-0 w-2 cursor-col-resize"
+                        style="background-color: var(--bg-secondary);"></div>
+
+                    <div id="video-side-panel" class="flex-shrink-0 rounded-lg h-full flex flex-col"
+                        style="background-color: var(--bg-panels); width: 420px;">
+
+                        <div id="video-analysis-setup" class="p-6 overflow-y-auto">
+                            <h3 class="text-xl font-bold mb-4">Panel de Análisis</h3>
+
+                            <div class="mt-4 mb-4">
+                                <p class="font-medium mb-3">Análisis a realizar:</p>
+                                <div id="analysis-types-container" class="grid grid-cols-2 gap-2">
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <p class="font-medium mb-2">Profundidad del análisis:</p>
+                                <div id="depth-buttons-container" class="flex flex-col space-y-2">
+                                    <button data-depth="lite" class="depth-btn w-full text-sm py-2 rounded-md"
+                                        style="background-color: var(--bg-secondary);">Lite (Cada 60 frames)</button>
+                                    <button data-depth="normal"
+                                        class="depth-btn active w-full text-sm py-2 rounded-md">Normal (Cada 10
+                                        frames)</button>
+                                    <button data-depth="full" class="depth-btn w-full text-sm py-2 rounded-md"
+                                        style="background-color: var(--bg-secondary);">Full (Muestreo
+                                        Inteligente)</button>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label class="font-medium mb-2 block">Palabras a excluir:</label>
+                                <input type="text" id="video-excluded-words" placeholder="palabra1, palabra2..."
+                                    class="w-full p-2 rounded-md text-sm"
+                                    style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+                            </div>
+                            <button id="start-video-analysis-btn" class="w-full font-bold py-3 rounded-lg mt-4"
+                                style="background-color: var(--accent); color: var(--bg-primary);" disabled>Analizar
+                                Videos en Cola</button>
+                        </div>
+
+                        <div id="video-report-panel" class="hidden flex flex-col h-full">
+                            <div class="p-6 flex-shrink-0">
+                                <div class="flex justify-between items-center">
+                                    <h4 class="text-lg font-bold">Reporte</h4>
+                                    <div class="dropdown">
+                                        <button class="flex items-center text-sm p-2 rounded-lg"
+                                            style="background-color: var(--bg-secondary);"><i data-lucide="download"
+                                                class="w-4 h-4 mr-2"></i>Exportar</button>
+                                        <div class="dropdown-content">
+                                            <a href="#" id="export-srt"><i data-lucide="file-audio"
+                                                    class="w-4 h-4 mr-2"></i>Exportar como .SRT</a>
+                                            <a href="#" id="export-csv"><i data-lucide="file-spreadsheet"
+                                                    class="w-4 h-4 mr-2"></i>Exportar como CSV</a>
+                                            <a href="#" id="export-xml"><i data-lucide="file-code"
+                                                    class="w-4 h-4 mr-2"></i>Exportar como XML (NLE)</a>
+                                            <a href="#" id="export-html"><i data-lucide="file-type"
+                                                    class="w-4 h-4 mr-2"></i>Exportar como HTML</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-4 pt-4 border-t" style="border-color: var(--border-color);">
+                                    <p class="font-medium mb-3">Mostrar categorías:</p>
+                                    <div id="report-toggles" class="flex flex-wrap gap-2"></div>
+                                </div>
+                            </div>
+                            <div id="video-report-items" class="flex-grow overflow-y-auto px-6 pb-6 space-y-4"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="history-screen" class="h-full flex flex-col">
+                <h2 class="text-3xl font-bold mb-6">Historial de Análisis</h2>
+                <div class="overflow-y-auto">
+                    <table class="w-full text-left">
+                        <thead style="background-color: var(--bg-secondary);">
+                            <tr>
+                                <th class="p-4">Tipo</th>
+                                <th class="p-4">Nombre</th>
+                                <th class="p-4">Fecha</th>
+                                <th class="p-4">Hallazgos</th>
+                                <th class="p-4 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body"></tbody>
+                    </table>
+                </div>
+                <div id="history-empty-state" class="hidden h-full flex-col items-center justify-center">
+                    <p>No hay análisis en el historial.</p>
+                </div>
+            </div>
+
+            <div id="settings-screen">
+                <h2 class="text-3xl font-bold mb-6">Configuración</h2>
+                <div class="max-w-2xl space-y-6">
+                    <div class="rounded-lg p-6" style="background-color: var(--bg-panels);">
+                        <h3 class="text-lg font-bold mb-3">Palabras Excluidas</h3>
+                        <p class="text-sm text-secondary mb-2">Palabras que no se marcarán como errores ortográficos (separadas por coma). Se aplica a video e imágenes.</p>
+                        <input type="text" id="settings-excluded-words" placeholder="marca, tech, app..."
+                            class="w-full p-3 rounded-md text-sm"
+                            style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+                    </div>
+                    <div class="rounded-lg p-6" style="background-color: var(--bg-panels);">
+                        <h3 class="text-lg font-bold mb-3">Diccionario Personalizado</h3>
+                        <p class="text-sm text-secondary mb-2">Palabras de marca o técnicas que no deben marcarse como errores (separadas por coma).</p>
+                        <input type="text" id="settings-custom-dictionary" placeholder="Platzi, JavaScript, DevOps..."
+                            class="w-full p-3 rounded-md text-sm"
+                            style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+                    </div>
+                    <div class="rounded-lg p-6" style="background-color: var(--bg-panels);">
+                        <h3 class="text-lg font-bold mb-3">Análisis de Video por Defecto</h3>
+                        <p class="text-sm text-secondary mb-2">Tipos de análisis activados por defecto al iniciar un video.</p>
+                        <div id="settings-default-video-types" class="flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+                    <div class="rounded-lg p-6" style="background-color: var(--bg-panels);">
+                        <h3 class="text-lg font-bold mb-3">Análisis de Imágenes por Defecto</h3>
+                        <p class="text-sm text-secondary mb-2">Tipos de análisis activados por defecto al iniciar imágenes.</p>
+                        <div id="settings-default-image-types" class="flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+                    <button id="save-settings-btn" class="font-bold py-3 px-8 rounded-lg"
+                        style="background-color: var(--accent); color: var(--bg-primary);">
+                        Guardar Configuración
+                    </button>
+                </div>
+            </div>
+
+            <div id="status-screen">
+                <h2 class="text-3xl font-bold mb-6">Estado del Servidor</h2>
+                <div class="flex items-center gap-4 mb-6">
+                    <button id="refresh-status-btn" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm"
+                        style="background-color: var(--bg-panels); border: 1px solid var(--border-color);">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Actualizar
+                    </button>
+                </div>
+                <div id="model-status-cards" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl"></div>
+            </div>
+
+            <div id="synthesis-log-screen">
+                <h2 class="text-3xl font-bold mb-6">Log de Síntesis</h2>
+                <div id="synthesis-log-entries" class="space-y-4 max-w-4xl">
+                    <p id="synthesis-log-empty" class="text-secondary">No hay entradas en el log de síntesis.</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+
+            // ============================================
+            // ESTADO Y NAVEGACIÓN GLOBAL
+            // ============================================
+            /* MODIFICADO: Eliminado currentScriptFile */
+            const state = {
+                currentPage: 'login-screen',
+                imagesToAnalyze: [],
+                videoQueue: [],
+                currentVideoFile: null,
+                currentReport: null,
+                analysisResults: {},
+                currentVideoDuration: 0,
+                backendStatus: 'connecting',
+                modelStatus: {},
+                isAuthenticated: JSON.parse(localStorage.getItem('analyzerAuth') || 'false'),
+                history: JSON.parse(localStorage.getItem('analyzerHistory')) || [],
+                synthesisLog: JSON.parse(localStorage.getItem('analyzerSynthesisLog') || '[]'),
+                settings: JSON.parse(localStorage.getItem('analyzerSettings')) || {
+                    excludedWords: '',
+                    customDictionary: '',
+                    defaultAnalysisTypes: ['silences', 'keywords', 'ocr', 'contrast', 'fillers', 'centering', 'black_frames'],
+                    defaultImageAnalysisTypes: ['ocr', 'contrast', 'centering', 'quantifier']
+                }
+            };
+
+            const navMap = {
+                'video-screen': 'goto-video',
+                'images-screen': 'goto-images',
+                'history-screen': 'goto-history',
+                'welcome-screen': 'goto-welcome',
+                'settings-screen': 'goto-settings',
+                'status-screen': 'goto-status',
+                'synthesis-log-screen': 'goto-synthesis-log'
+            };
+
+            function navigateTo(pageId) {
+                // Auth guard: force login if not authenticated (except login itself)
+                if (pageId !== 'login-screen' && !state.isAuthenticated) {
+                    pageId = 'login-screen';
+                }
+
+                document.querySelectorAll('.main-content > div').forEach(screen => {
+                    screen.classList.remove('active');
+                });
+                const targetScreen = document.getElementById(pageId);
+                if (targetScreen) {
+                    targetScreen.classList.add('active');
+                    state.currentPage = pageId;
+                }
+
+                // Update Sidebar highlighting
+                document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+                const navId = navMap[pageId];
+                if (navId) {
+                    const navBtn = document.getElementById(navId);
+                    if (navBtn) navBtn.classList.add('active');
+                }
+
+                // Render page-specific content
+                if (pageId === 'settings-screen') renderSettingsPage();
+                if (pageId === 'status-screen') renderStatusPage();
+                if (pageId === 'synthesis-log-screen') renderSynthesisLog();
+            }
+
+            // ============================================
+            // LÓGICA DE ANÁLISIS DE VIDEO
+            // ============================================
+
+            /* ... (Declaraciones de variables de video) ... */
+            const videoDropZone = document.getElementById('video-drop-zone');
+            const videoFileInput = document.getElementById('video-file-input');
+            const addMoreVideosBtn = document.getElementById('add-more-videos-btn');
+            const videoPlayerContainer = document.getElementById('video-player-container');
+            const videoPlayer = document.getElementById('video-player');
+            const videoSidePanel = document.getElementById('video-side-panel');
+            const startVideoAnalysisBtn = document.getElementById('start-video-analysis-btn');
+            const videoAnalysisSetup = document.getElementById('video-analysis-setup');
+            const videoReportPanel = document.getElementById('video-report-panel');
+            const videoFilename = document.getElementById('video-filename');
+            /* MODIFICADO: Eliminadas variables de script */
+            const videoQueuePanel = document.getElementById('video-queue-panel');
+            const videoQueueList = document.getElementById('video-queue-list');
+            const loadingScreen = document.getElementById('loading-screen');
+
+            const issueTypes = {
+                'silences': { label: 'Silencio', color: 'var(--marker-blue)' },
+                'keywords': { label: 'Palabra Clave', color: 'var(--marker-peach)' },
+                'ocr': { label: 'Ortografía', color: 'var(--marker-pink)' },
+                'contrast': { label: 'Contraste', color: 'var(--marker-contrast)' },
+                'fillers': { label: 'Muletilla', color: 'var(--marker-purple)' },
+                'centering': { label: 'Centrado', color: 'var(--marker-centering)' },
+                'black_frames': { label: 'Frame Negro', color: 'var(--marker-black-frame)' },
+                'synthesis': { label: 'Sintesis IA', color: '#F59E0B' }
+            };
+
+            // --- ANALISYS TYPES CONTANIER ---
+            const analysisTypesContainer = document.getElementById('analysis-types-container');
+
+            // Función para poblar los botones de análisis
+            function renderAnalysisToggles() {
+                analysisTypesContainer.innerHTML = '';
+                Object.entries(issueTypes).forEach(([key, { label, color }]) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'analysis-btn text-sm active';
+                    btn.dataset.label = key;
+                    btn.style.setProperty('--cat-color', color);
+                    btn.textContent = label;
+                    btn.addEventListener('click', () => btn.classList.toggle('active'));
+                    analysisTypesContainer.appendChild(btn);
+                });
+            }
+            // --- FIN ANALISYS TYPES CONTANIER ---
+
+            // --- NUEVO: Lógica corregida para botones de Profundidad ---
+            document.querySelectorAll('.depth-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // 1. Resetear todos los botones
+                    document.querySelectorAll('.depth-btn').forEach(b => {
+                        b.classList.remove('active');
+                        // Restauramos el color de fondo "apagado"
+                        b.style.backgroundColor = 'var(--bg-secondary)';
+                        b.style.color = ''; // Resetear color de texto
+                        b.style.borderColor = ''; // Resetear borde
+                    });
+
+                    // 2. Activar el botón clicado
+                    const target = e.currentTarget; // Usamos currentTarget para asegurar que es el botón
+                    target.classList.add('active');
+
+                    // IMPORTANTE: Quitamos el estilo inline para que la clase CSS .active (con !important) mande
+                    target.style.backgroundColor = '';
+                    target.style.color = '';
+                    target.style.borderColor = '';
+                });
+            });
+            // -----------------------------------------------------------
+
+            /* MODIFICADO: Eliminada lógica de scriptFileInput */
+
+            // --- INICIA EL CÓDIGO PEGADO ---
+
+            // (Funciones para el loader)
+            function resetLoader() {
+                document.querySelectorAll('.task-loader').forEach(task => {
+                    task.classList.remove('task-done');
+                    task.querySelector('.task-status').style.color = 'var(--text-secondary)';
+                    task.querySelector('.task-icon').innerHTML = '<div class="loader"></div>';
+                    task.querySelector('.task-message').textContent = 'Pendiente...';
+                });
+            }
+            function updateLoaderTask(taskId, status, message = 'Hecho') {
+                const taskEl = document.getElementById(`task-${taskId}`);
+                if (!taskEl) return;
+
+                const statusEl = taskEl.querySelector('.task-status');
+                const iconEl = taskEl.querySelector('.task-icon');
+                const msgEl = taskEl.querySelector('.task-message');
+
+                if (status === 'processing') {
+                    statusEl.style.color = 'var(--warning-color)';
+                    iconEl.innerHTML = '<div class="loader"></div>';
+                    msgEl.textContent = message;
+                } else if (status === 'done') {
+                    taskEl.classList.add('task-done');
+                    statusEl.style.color = 'var(--accent)';
+                    iconEl.innerHTML = '<i data-lucide="check"></i>';
+                    msgEl.textContent = message;
+                    lucide.createIcons();
+                }
+            }
+
+
+            startVideoAnalysisBtn.addEventListener('click', async () => {
+                if (!state.currentVideoFile) {
+                    alert("No hay un video seleccionado para analizar.");
+                    return;
+                }
+
+                resetLoader();
+                loadingScreen.style.display = 'flex';
+                document.getElementById('loading-title').textContent = `Analizando ${state.currentVideoFile.name}`;
+
+                const analysisTypes = Array.from(document.querySelectorAll('#analysis-types-container .analysis-btn.active')).map(btn => btn.dataset.label);
+
+                // --- FIX: Asegurar que leemos el depth correcto ---
+                const activeDepthBtn = document.querySelector('#depth-buttons-container .depth-btn.active');
+                const depth = activeDepthBtn ? activeDepthBtn.dataset.depth : 'normal';
+
+                // El servidor irá actualizando el estado, pero simulamos un flujo simple
+                updateLoaderTask('audio', 'processing', 'Procesando...');
+
+                try {
+                    const formData = new FormData();
+                    const videoExcludedInput = document.getElementById('video-excluded-words');
+                    const videoExcluded = videoExcludedInput ? videoExcludedInput.value : '';
+                    const dictWords = state.settings.customDictionary || '';
+                    const mergedExcluded = [state.settings.excludedWords, videoExcluded, dictWords].filter(Boolean).join(',');
+                    formData.append('file', state.currentVideoFile);
+                    formData.append('settings', JSON.stringify({
+                        analysisTypes,
+                        depth,
+                        excludedWords: mergedExcluded
+                    }));
+
+                    // ----- ¡CÓDIGO REAL ACTIVADO! -----
+                    const response = await fetch('http://localhost:8000/api/analyze/video', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    // (Simulamos las otras tareas mientras esperamos la respuesta final)
+                    updateLoaderTask('audio', 'done');
+                    updateLoaderTask('vision', 'processing', 'Analizando frames...');
+                    updateLoaderTask('geometry', 'processing', 'Verificando...');
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || `Error del servidor: ${response.status}`);
+                    }
+
+                    const results = await response.json();
+                    // ----- FIN CÓDIGO REAL -----
+
+                    updateLoaderTask('vision', 'done');
+                    updateLoaderTask('geometry', 'done');
+                    updateLoaderTask('synthesis', 'processing', 'Comparando...');
+
+                    // --- USAR RESULTADOS REALES ---
+                    // --- USAR RESULTADOS REALES ---
+                    state.currentReport = results;
+                    state.currentVideoDuration = videoPlayer.duration;
+
+                    // Guardar resultado
+                    state.analysisResults[state.currentVideoFile.name] = {
+                        report: results,
+                        duration: state.currentVideoDuration
+                    };
+
+                    const formattedReport = transformApiResultsToReport(results);
+
+                    updateLoaderTask('synthesis', 'done');
+
+                    // Push synthesis log entries to state
+                    if (results.synthesis_log && results.synthesis_log.length > 0) {
+                        state.synthesisLog.push(...results.synthesis_log);
+                        localStorage.setItem('analyzerSynthesisLog', JSON.stringify(state.synthesisLog));
+                    }
+
+                    // Pequeña pausa para que el usuario vea "Hecho"
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    renderVideoReport(formattedReport);
+                    videoAnalysisSetup.classList.add('hidden');
+                    videoReportPanel.classList.remove('hidden');
+                    saveToHistory('video', state.currentVideoFile.name, formatTime(videoPlayer.duration), formattedReport, results.srt);
+
+                } catch (error) {
+                    alert(`Error en el análisis: ${error.message}`);
+                } finally {
+                    loadingScreen.style.display = 'none';
+                }
+            });
+            // --- TERMINA EL CÓDIGO PEGADO ---
+
+            function transformApiResultsToReport(apiResults) {
+                const report = [];
+                let issueId = 0;
+
+                // El backend v2 devuelve { report: { ... }, srt: "..." }
+                const findings = apiResults.report || {};
+
+                // --- 1. Audio y Texto ---
+                (findings.silences || []).forEach(item => report.push({
+                    id: `issue-${issueId++}`, type: 'silences', time: item.start, label: 'Silencio', color: issueTypes.silences.color, description: `Silencio de ${item.duration.toFixed(2)}s.`
+                }));
+                (findings.keywords || []).forEach(item => report.push({
+                    id: `issue-${issueId++}`, type: 'keywords', time: item.start, label: 'Palabra Clave', color: issueTypes.keywords.color, description: `Encontrada: "${item.keyword}".`
+                }));
+
+                // OCR - Ahora muestra duración del error
+                (findings.ocr || []).forEach(item => {
+                    const duration = item.duration ? ` (${item.duration.toFixed(1)}s)` : '';
+                    const occurrences = item.occurrences > 1 ? ` [${item.occurrences}x]` : '';
+                    report.push({
+                        id: `issue-${issueId++}`,
+                        type: 'ocr',
+                        time: item.timestamp,
+                        label: 'Ortografía',
+                        color: issueTypes.ocr.color,
+                        description: `"${item.text}"${duration}${occurrences}`
+                    });
+                });
+
+                (findings.fillers || []).forEach(item => report.push({
+                    id: `issue-${issueId++}`, type: 'fillers', time: item.start, label: 'Muletilla', color: issueTypes.fillers.color, description: `Detectada: "${item.text}"`
+                }));
+
+                // --- 2. Geometría - Ahora con duración ---
+                (findings.centering || []).forEach(item => {
+                    const duration = item.duration ? ` (${item.duration.toFixed(1)}s)` : '';
+                    report.push({
+                        id: `issue-${issueId++}`,
+                        type: 'centering',
+                        time: item.timestamp,
+                        label: 'Centrado',
+                        color: issueTypes.centering.color,
+                        description: `${item.issue}${duration}`
+                    });
+                });
+
+                (findings.black_frames || []).forEach(item => {
+                    const duration = item.duration ? ` (${item.duration.toFixed(1)}s)` : '';
+                    report.push({
+                        id: `issue-${issueId++}`,
+                        type: 'black_frames',
+                        time: item.timestamp,
+                        label: 'Frame Negro',
+                        color: issueTypes.black_frames.color,
+                        description: `Frame negro${duration}`
+                    });
+                });
+
+                // --- 3. Contraste y Síntesis ---
+                (findings.contrast || []).forEach(item => {
+                    const duration = item.duration ? ` (${item.duration.toFixed(1)}s)` : '';
+                    report.push({
+                        id: `issue-${issueId++}`,
+                        type: 'contrast',
+                        time: item.timestamp,
+                        label: 'Contraste',
+                        color: issueTypes.contrast.color,
+                        description: `${item.issue}${duration}`
+                    });
+                });
+
+                (findings.synthesis || []).forEach(item => report.push({
+                    id: `issue-${issueId++}`,
+                    type: 'synthesis',
+                    time: 0,
+                    label: issueTypes.synthesis.label,
+                    color: issueTypes.synthesis.color,
+                    description: item.issue
+                }));
+
+                return report.sort((a, b) => a.time - b.time);
+            }
+
+            // --- INICIA EL CÓDIGO PEGADO ---
+
+            function renderVideoReport(report) {
+                const reportContainer = document.getElementById('video-report-items');
+                const togglesContainer = document.getElementById('report-toggles');
+                reportContainer.innerHTML = '';
+                togglesContainer.innerHTML = '';
+
+                const findingTypes = [...new Set(report.map(item => item.type))];
+
+                if (report.length === 0) {
+                    reportContainer.innerHTML = '<p class="text-secondary p-4">No se encontraron hallazgos para las categorías seleccionadas.</p>';
+                }
+
+                // Crear botones de filtro
+                findingTypes.forEach(type => {
+                    const issueInfo = issueTypes[type] || { label: type, color: '#9ca3af' };
+                    const btn = document.createElement('button');
+                    btn.className = 'filter-btn analysis-btn text-sm active';
+                    btn.dataset.type = type;
+                    btn.textContent = issueInfo.label;
+                    btn.style.setProperty('--btn-color', issueInfo.color);
+                    btn.addEventListener('click', () => {
+                        btn.classList.toggle('active');
+                        setupLabelToggling(); // Re-filtrar
+                    });
+                    togglesContainer.appendChild(btn);
+                });
+
+                // Crear items del reporte (Lista)
+                report.forEach(item => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'report-item flex items-center justify-between p-3 rounded-lg cursor-pointer';
+                    itemEl.dataset.type = item.type;
+                    itemEl.dataset.time = item.time;
+                    itemEl.innerHTML = `
+                        <div class="flex items-center">
+                            <div class="w-2 h-2 rounded-full mr-3" style="background-color: ${item.color};"></div>
+                            <div>
+                                <span class="font-medium">${item.label}</span>
+                                <p class="text-sm text-secondary">${item.description}</p>
+                            </div>
+                        </div>
+                        <span class="text-sm text-secondary">${formatTime(item.time)}</span>
+                    `;
+                    itemEl.addEventListener('click', () => seekToIssue(item.time));
+                    reportContainer.appendChild(itemEl);
+                });
+
+                // Renderizar Timeline Markers
+                renderTimelineMarkers(report, state.currentVideoDuration);
+            }
+
+            function renderTimelineMarkers(report, duration) {
+                const timelineMarkers = document.getElementById('timeline-markers');
+                if (!timelineMarkers) return; // Validación por si acaso
+
+                timelineMarkers.innerHTML = '';
+
+                if (duration <= 0) return;
+
+                // 1. Agrupar por tiempo (redondeado a 0.2s para agrupar eventos muy cercanos)
+                const grouped = {};
+                report.forEach(item => {
+                    // Usar una clave basada en tiempo redondeado para agrupar
+                    const timeKey = Math.round(item.time * 5) / 5; // Grupos de 0.2s
+                    if (!grouped[timeKey]) {
+                        grouped[timeKey] = { time: item.time, items: [] };
+                    }
+                    grouped[timeKey].items.push(item);
+                });
+
+                // 2. Renderizar marcadores agrupados
+                Object.values(grouped).forEach(group => {
+                    const marker = document.createElement('div');
+                    marker.className = 'timeline-marker';
+                    const positionPercent = (group.time / duration) * 100;
+
+                    // Evitar que se salgan del contenedor
+                    const safePosition = Math.min(Math.max(positionPercent, 0), 99.5);
+
+                    marker.style.left = `${safePosition}%`;
+
+                    // Determinar colores únicos
+                    const uniqueColors = [...new Set(group.items.map(i => i.color))];
+
+                    if (uniqueColors.length === 1) {
+                        marker.style.backgroundColor = uniqueColors[0];
+                    } else {
+                        // Gradiente vertical para múltiples colores (estilo bandera)
+                        const segmentSize = 100 / uniqueColors.length;
+                        const gradientParts = uniqueColors.map((color, index) => {
+                            const start = index * segmentSize;
+                            const end = (index + 1) * segmentSize;
+                            return `${color} ${start}%, ${color} ${end}%`;
+                        });
+                        marker.style.background = `linear-gradient(to bottom, ${gradientParts.join(', ')})`;
+                    }
+
+                    // Tooltip con todas las descripciones
+                    const descriptions = group.items.map(i => `• [${i.label}] ${i.description}`).join('\n');
+                    marker.title = `${formatTime(group.time)}\n${descriptions}`;
+
+                    marker.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Evitar triggers raros
+                        seekToIssue(group.time);
+                    });
+
+                    timelineMarkers.appendChild(marker);
+                });
+            }
+
+            function seekToIssue(timeInSeconds) {
+                if (videoPlayer) {
+                    const autoplayToggle = document.getElementById('autoplay-toggle');
+
+                    // Si autoplay está activo, pausar, esperar 300ms y reproducir
+                    if (autoplayToggle && autoplayToggle.checked) {
+                        videoPlayer.currentTime = timeInSeconds;
+                        videoPlayer.pause();
+
+                        setTimeout(() => {
+                            videoPlayer.play().catch(e => console.log("Error playing:", e));
+                        }, 300);
+                    } else {
+                        // Solo saltar al frame y pausar
+                        videoPlayer.currentTime = timeInSeconds;
+                        videoPlayer.pause();
+                    }
+                }
+            }
+
+            // --- LÓGICA DEL MÓDULO DE IMÁGENES ---
+
+            const imageDropZone = document.getElementById('image-drop-zone');
+            const imageFileInput = document.getElementById('image-file-input');
+            const imageListPanel = document.getElementById('image-list-panel');
+            const imageList = document.getElementById('image-list');
+            /* Image preview handled by lightbox */
+            const clearImagesBtn = document.getElementById('clear-images-btn');
+            const startImageAnalysisBtn = document.getElementById('start-image-analysis-btn');
+            const imageReportPanel = document.getElementById('image-report-panel');
+            const imageReportItems = document.getElementById('image-report-items');
+            const imageNewAnalysisBtn = document.getElementById('image-new-analysis-btn');
+            const imageAnalysisSetup = document.getElementById('image-analysis-setup');
+
+            // Drag & Drop Imágenes
+            imageDropZone.addEventListener('click', () => imageFileInput.click());
+            imageDropZone.addEventListener('dragover', (e) => { e.preventDefault(); imageDropZone.classList.add('dragover'); });
+            imageDropZone.addEventListener('dragleave', () => imageDropZone.classList.remove('dragover'));
+            imageDropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                imageDropZone.classList.remove('dragover');
+                handleImageFiles(e.dataTransfer.files);
+            });
+            imageFileInput.addEventListener('change', (e) => handleImageFiles(e.target.files));
+
+            function handleImageFiles(files) {
+                const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+                if (validFiles.length === 0) return;
+
+                state.imagesToAnalyze = [...state.imagesToAnalyze, ...validFiles];
+                renderImageList();
+                updateImageUIState();
+            }
+
+            function renderImageList() {
+                imageList.innerHTML = '';
+                state.imagesToAnalyze.forEach((file, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'relative group aspect-square rounded-md overflow-hidden bg-gray-800 border border-gray-700 cursor-pointer';
+
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    img.className = 'w-full h-full object-cover';
+
+                    div.appendChild(img);
+
+                    const label = document.createElement('div');
+                    label.className = 'absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-xs p-1 truncate text-center';
+                    label.textContent = file.name;
+                    div.appendChild(label);
+
+                    // Click para preview -> AHORA abre LIGHTBOX si hay resultados
+                    div.addEventListener('click', () => {
+                        if (state.currentImageResults && state.currentImageResults[index]) {
+                            openLightbox(index);
+                        }
+                    });
+
+                    imageList.appendChild(div);
+                });
+            }
+
+            function updateImageUIState() {
+                const hasImages = state.imagesToAnalyze.length > 0;
+                imageListPanel.classList.toggle('hidden', !hasImages);
+                startImageAnalysisBtn.disabled = !hasImages;
+                /* Preview logic removed */
+            }
+
+            clearImagesBtn.addEventListener('click', () => {
+                state.imagesToAnalyze = [];
+                state.currentImageResults = null; // Clear results
+                renderImageList();
+                updateImageUIState();
+                // imagePreview logic removed
+                imageDropZone.classList.remove('hidden');
+                imageReportPanel.classList.add('hidden');
+                imageAnalysisSetup.classList.remove('hidden');
+            });
+
+            // Toggle botones de análisis de imagen
+            document.querySelectorAll('#image-analysis-types .analysis-btn').forEach(btn => {
+                btn.addEventListener('click', () => btn.classList.toggle('active'));
+            });
+
+            // Helper to set task names for image context
+            function setImageLoaderNames() {
+                const names = { 'task-audio': '1. OCR (Texto)', 'task-vision': '2. Geometría', 'task-geometry': '3. Quantifier', 'task-synthesis': '4. Resultados' };
+                Object.entries(names).forEach(([id, name]) => {
+                    const el = document.getElementById(id);
+                    if (el) el.querySelector('.task-name').textContent = name;
+                });
+            }
+            function restoreVideoLoaderNames() {
+                const names = { 'task-audio': '1. Análisis de Audio', 'task-vision': '2. Análisis de Visión', 'task-geometry': '3. Análisis de Geometría', 'task-synthesis': '4. Síntesis' };
+                Object.entries(names).forEach(([id, name]) => {
+                    const el = document.getElementById(id);
+                    if (el) el.querySelector('.task-name').textContent = name;
+                });
+            }
+
+            // Iniciar Análisis de Imágenes
+            startImageAnalysisBtn.addEventListener('click', async () => {
+                if (state.imagesToAnalyze.length === 0) return;
+
+                resetLoader();
+                setImageLoaderNames();
+                loadingScreen.style.display = 'flex';
+                document.getElementById('loading-title').textContent = `Analizando ${state.imagesToAnalyze.length} imágenes`;
+                updateLoaderTask('audio', 'processing', 'Procesando OCR...');
+
+                const analysisTypes = Array.from(document.querySelectorAll('#image-analysis-types .analysis-btn.active')).map(btn => btn.dataset.label);
+                const excludedWords = document.getElementById('image-excluded-words').value;
+                // Merge custom dictionary words into excluded words
+                const dictWords = state.settings.customDictionary || '';
+                const mergedExcluded = [excludedWords, dictWords].filter(Boolean).join(',');
+
+                try {
+                    const formData = new FormData();
+                    state.imagesToAnalyze.forEach(file => formData.append('files', file));
+                    formData.append('settings', JSON.stringify({
+                        analysisTypes,
+                        excludedWords: mergedExcluded,
+                        enableQuantifier: analysisTypes.includes('quantifier')
+                    }));
+
+                    updateLoaderTask('audio', 'done', 'OCR Completo');
+                    updateLoaderTask('vision', 'processing', 'Analizando geometría...');
+
+                    const response = await fetch('http://localhost:8000/api/analyze/images', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) throw new Error('Error en análisis de imágenes');
+
+                    updateLoaderTask('vision', 'done', 'Geometría completa');
+                    updateLoaderTask('geometry', 'processing', 'Quantifier...');
+
+                    const data = await response.json();
+
+                    updateLoaderTask('geometry', 'done', 'Quantifier completo');
+                    updateLoaderTask('synthesis', 'done', 'Análisis Completo');
+
+                    setTimeout(() => {
+                        loadingScreen.style.display = 'none';
+                        restoreVideoLoaderNames();
+                        renderImageReport(data.results);
+                    }, 500);
+
+                } catch (error) {
+                    console.error(error);
+                    alert("Error analizando imágenes: " + error.message);
+                    loadingScreen.style.display = 'none';
+                    restoreVideoLoaderNames();
+                }
+            });
+
+            function renderImageReport(results) {
+                imageAnalysisSetup.classList.add('hidden');
+                imageReportPanel.classList.remove('hidden');
+                imageReportItems.innerHTML = '';
+
+                results.forEach((res, index) => {
+                    // Guardar resultados en estado global para el lightbox
+                });
+                state.currentImageResults = results; // Store globally
+
+                results.forEach((res, index) => {
+                    // Contenedor por imagen
+                    const imgContainer = document.createElement('div');
+                    imgContainer.className = 'border border-gray-700 rounded-lg p-4 bg-gray-800 mb-4';
+
+                    const header = document.createElement('h5');
+                    header.className = 'font-bold text-lg mb-2 text-white truncate';
+                    // Usar nombre original del archivo si es posible, fallback al del resultado
+                    const originalName = state.imagesToAnalyze[index] ? state.imagesToAnalyze[index].name : res.filename;
+                    header.textContent = originalName;
+                    imgContainer.appendChild(header);
+
+                    let findings = [];
+
+                    if (res.error) {
+                        const err = document.createElement('p');
+                        err.className = 'text-red-400 text-sm';
+                        err.textContent = `Error: ${res.error}`;
+                        imgContainer.appendChild(err);
+                    } else {
+                        // Renderizar hallazgos
+                        // Renderizar hallazgos (Soporta estructura nested 'findings' o flat legacy)
+                        const src = res.findings || res;
+
+                        findings = [
+                            ...(src.ocr || src.ocr_issues || []).map(i => ({ ...i, type: 'ocr', label: 'Ortografía' })),
+                            ...(src.contrast || src.contrast_issues || []).map(i => ({ ...i, type: 'contrast', label: 'Contraste' })),
+                            ...(src.centering || src.centering_issues || []).map(i => ({ ...i, type: 'centering', label: 'Centrado' }))
+                        ];
+
+                        if (findings.length === 0) {
+                            const ok = document.createElement('p');
+                            ok.className = 'text-green-400 text-sm';
+                            ok.textContent = '✅ Sin problemas detectados';
+                            imgContainer.appendChild(ok);
+                        } else {
+                            findings.forEach(f => {
+                                const item = document.createElement('div');
+                                item.className = 'flex items-start mt-2 text-sm';
+                                const color = issueTypes[f.type]?.color || '#fff';
+                                item.innerHTML = `
+                                    <div class="w-2 h-2 rounded-full mt-1.5 mr-2 flex-shrink-0" style="background-color: ${color}"></div>
+                                    <div>
+                                        <span class="font-bold" style="color:${color}">${f.label}:</span> 
+                                        <span class="text-gray-300">${f.issue || f.text}</span>
+                                        ${f.context ? `<br><span class="text-xs text-gray-500">Contexto: "${f.context}"</span>` : ''}
+                                    </div>
+                                `;
+                                imgContainer.appendChild(item);
+                            });
+                        }
+                    }
+
+                    // --- RENDERIZAR VISUAL QUANTIFIER (Si existe) ---
+                    // --- RENDERIZAR VISUAL QUANTIFIER (RESUMEN) ---
+                    if (res.quantifier_data && !res.quantifier_data.error) {
+                        const q = res.quantifier_data;
+
+                        // Contenedor clicable para abrir Lightbox
+                        const summaryDiv = document.createElement('div');
+                        summaryDiv.className = 'mt-4 cursor-pointer group hover:bg-gray-700 p-2 rounded transition-colors';
+                        summaryDiv.onclick = () => openLightbox(index);
+
+                        // Layout: Imagen (Izq) + Score (Der)
+                        summaryDiv.innerHTML = `
+                            <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-4">
+                                <div class="w-24 h-24 bg-black rounded flex-shrink-0 border border-gray-600 overflow-hidden relative flex items-center justify-center p-1">
+                                    <canvas id="thumb-chart-${index}" class="w-full h-full"></canvas>
+                                </div>
+                                <div>
+                                    <h6 class="font-bold text-accent text-lg">Visual Score: ${q.score_promedio}</h6>
+                                    <p class="text-xs text-gray-400 italic line-clamp-2">"${q.conclusion}"</p>
+                                    <p class="text-xs text-blue-400 mt-1 flex items-center gap-1 group-hover:underline">
+                                        <i data-lucide="bar-chart-2" class="w-3 h-3"></i> Ver Gráfico y Detalles
+                                    </p>
+                                </div>
+                            </div>
+                        `;
+                        imgContainer.appendChild(summaryDiv);
+
+                        // Render Mini Chart
+                        setTimeout(() => {
+                            const ctx = document.getElementById(`thumb-chart-${index}`).getContext('2d');
+                            const scores = q.analisis || {};
+                            new Chart(ctx, {
+                                type: 'radar',
+                                data: {
+                                    labels: ['M', 'E', 'B', 'H', 'T'],
+                                    datasets: [{
+                                        data: [
+                                            scores.moderno?.score || 0,
+                                            scores.ensena?.score || 0,
+                                            scores.buen_diseno?.score || 0,
+                                            scores.humano?.score || 0,
+                                            scores.tipografico?.score || 0
+                                        ],
+                                        backgroundColor: 'rgba(10, 233, 138, 0.4)',
+                                        borderColor: '#0AE98A',
+                                        borderWidth: 1,
+                                        pointRadius: 0
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                                    scales: {
+                                        r: {
+                                            ticks: { display: false, maxTicksLimit: 1 },
+                                            pointLabels: { display: false },
+                                            grid: { color: 'rgba(255,255,255,0.2)' },
+                                            suggestedMin: 0, suggestedMax: 10
+                                        }
+                                    }
+                                }
+                            });
+                        }, 50);
+
+                    } else if (res.quantifier_data && res.quantifier_data.error) {
+                        const errDiv = document.createElement('div');
+                        errDiv.className = 'mt-4 text-red-400 text-sm';
+                        errDiv.textContent = `Error Visual: ${res.quantifier_data.error}`;
+                        imgContainer.appendChild(errDiv);
+                    }
+
+                    imageReportItems.appendChild(imgContainer);
+
+                    // Guardar en historial
+                    saveToHistory('image', res.filename, findings.length, findings, res.quantifier_data);
+                });
+            }
+
+            imageNewAnalysisBtn.addEventListener('click', () => {
+                imageReportPanel.classList.add('hidden');
+                imageAnalysisSetup.classList.remove('hidden');
+            });
+
+            function setupLabelToggling() {
+                const activeTypes = Array.from(document.querySelectorAll('#report-toggles .filter-btn.active')).map(btn => btn.dataset.type);
+                document.querySelectorAll('.report-item').forEach(item => {
+                    item.style.display = activeTypes.includes(item.dataset.type) ? 'flex' : 'none';
+                });
+            }
+
+            function formatTime(seconds) {
+                const m = Math.floor(seconds / 60);
+                const s = Math.floor(seconds % 60);
+                return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            }
+
+            // --- TERMINA EL CÓDIGO PEGADO ---
+
+            /* MODIFICADO: Lógica de exportación con SRT */
+            function download(filename, text) {
+                const element = document.createElement('a');
+                element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+                element.setAttribute('download', filename);
+                element.style.display = 'none';
+                document.body.appendChild(element);
+                element.click();
+                document.body.removeChild(element);
+            }
+
+            document.getElementById('export-srt').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (state.currentReport && state.currentReport.srt) {
+                    download(`${state.currentVideoFile.name}.srt`, state.currentReport.srt);
+                } else {
+                    alert('No se encontró transcripción SRT para este reporte.');
+                }
+            });
+            // --- INICIA EL CÓDIGO PEGADO ---
+
+            // LÓGICA DE EXPORTACIÓN REAL (en lugar de los alerts)
+
+            // EXPORTAR CSV
+            document.getElementById('export-csv').addEventListener('click', (e) => {
+                e.preventDefault();
+                const report = transformApiResultsToReport(state.currentReport);
+                if (!report || report.length === 0) {
+                    alert('No hay hallazgos para exportar.'); return;
+                }
+                let csvContent = "data:text/csv;charset=utf-8,";
+                csvContent += "Tipo de Archivo,Nombre de Archivo,Timestamp (seg),Tipo de Reporte,Mensaje\r\n";
+
+                report.forEach(item => {
+                    const row = [
+                        "Video",
+                        state.currentVideoFile.name,
+                        item.time,
+                        item.label,
+                        `"${item.description.replace(/"/g, '""')}"` // Escapar comillas
+                    ].join(",");
+                    csvContent += row + "\r\n";
+                });
+
+                download(`${state.currentVideoFile.name}.csv`, decodeURIComponent(csvContent));
+            });
+
+            // EXPORTAR XML (NLE-compatible: FCPXML 1.9 + xmeml v5)
+            document.getElementById('export-xml').addEventListener('click', (e) => {
+                e.preventDefault();
+                const report = transformApiResultsToReport(state.currentReport);
+                if (!report || report.length === 0) {
+                    alert('No hay hallazgos para exportar.'); return;
+                }
+                exportNleXml(report, state.currentVideoFile.name, videoPlayer.duration);
+            });
+
+            // EXPORTAR HTML
+            document.getElementById('export-html').addEventListener('click', (e) => {
+                e.preventDefault();
+                const report = transformApiResultsToReport(state.currentReport);
+                if (!report || report.length === 0) {
+                    alert('No hay hallazgos para exportar.'); return;
+                }
+
+                let htmlContent = `<html><head><title>Reporte - ${state.currentVideoFile.name}</title><style>body{font-family: sans-serif; background: #13161C; color: white;} h1{color: #0AE98A;} table{width: 100%; border-collapse: collapse;} th,td{padding: 8px 12px; border: 1px solid #2A2D35; text-align: left;}</style></head><body>`;
+                htmlContent += `<h1>Reporte de Análisis: ${state.currentVideoFile.name}</h1>`;
+                htmlContent += `<table><thead><tr><th>Timestamp</th><th>Tipo</th><th>Descripción</th></tr></thead><tbody>`;
+
+                report.forEach(item => {
+                    htmlContent += `<tr><td>${formatTime(item.time)}</td><td>${item.label}</td><td>${item.description}</td></tr>`;
+                });
+
+                htmlContent += `</tbody></table></body></html>`;
+                download(`${state.currentVideoFile.name}.html`, htmlContent);
+            });
+
+            // ============================================
+            // LÓGICA DE LA BARRA LATERAL (NUEVO)
+            // ============================================
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            const mainContent = document.getElementById('main-content');
+            const navLinks = document.querySelectorAll('.nav-link');
+
+            // Botones de navegación de la barra lateral
+            document.getElementById('goto-welcome').addEventListener('click', (e) => { e.preventDefault(); navigateTo('welcome-screen'); });
+            document.getElementById('goto-video').addEventListener('click', (e) => { e.preventDefault(); navigateTo('video-screen'); });
+            document.getElementById('goto-images').addEventListener('click', (e) => { e.preventDefault(); navigateTo('images-screen'); });
+            document.getElementById('goto-history').addEventListener('click', (e) => { e.preventDefault(); renderHistory(); navigateTo('history-screen'); });
+            document.getElementById('goto-settings').addEventListener('click', (e) => { e.preventDefault(); navigateTo('settings-screen'); });
+            document.getElementById('goto-status').addEventListener('click', (e) => { e.preventDefault(); navigateTo('status-screen'); });
+            document.getElementById('goto-synthesis-log').addEventListener('click', (e) => { e.preventDefault(); navigateTo('synthesis-log-screen'); });
+            document.getElementById('logout-button').addEventListener('click', (e) => {
+                e.preventDefault();
+                state.isAuthenticated = false;
+                localStorage.removeItem('analyzerAuth');
+                const emailInput = document.getElementById('login-email');
+                const passwordInput = document.getElementById('login-password');
+                if (emailInput) emailInput.value = '';
+                if (passwordInput) passwordInput.value = '';
+                navigateTo('login-screen');
+            });
+
+            // Sidebar highlighting is now handled directly inside navigateTo() via navMap
+
+            // Botón para colapsar la barra lateral
+            sidebarToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('collapsed');
+                sidebarToggle.querySelector('i').setAttribute('data-lucide', sidebar.classList.contains('collapsed') ? 'chevrons-right' : 'chevrons-left');
+                lucide.createIcons();
+            });
+
+            // Actualizar el estado del backend en la barra lateral
+            function updateBackendStatusUI() {
+                const statusDot = document.getElementById('status-dot');
+                const sText = document.querySelector('.status-text');
+
+                if (state.backendStatus === 'ready') {
+                    statusDot.style.backgroundColor = 'var(--success-color)';
+                    sText.textContent = 'Servidor Listo';
+                } else if (state.backendStatus === 'warning') {
+                    statusDot.style.backgroundColor = 'var(--warning-color)';
+                    sText.textContent = 'Parcial';
+                } else {
+                    statusDot.style.backgroundColor = 'var(--critical-color)';
+                    sText.textContent = 'Error de Servidor';
+                }
+            }
+
+            // updateBackendStatusUI is now called at the end of checkBackendStatus()
+
+            // --- TERMINA EL CÓDIGO PEGADO ---
+
+            // ============================================
+            // LÓGICA DEL MÓDULO DE HISTORIAL
+            // ============================================
+            const historyTableBody = document.getElementById('history-table-body');
+            const historyEmptyState = document.getElementById('history-empty-state');
+
+            /* MODIFICADO: Guardar SRT en el historial */
+            function saveToHistory(type, name, duration, fullReport, srt_data) {
+                const newEntry = { id: Date.now(), type, name, duration, date: new Date().toLocaleDateString('es-ES'), findings: fullReport, srt: srt_data };
+                state.history.unshift(newEntry);
+                localStorage.setItem('analyzerHistory', JSON.stringify(state.history));
+            }
+
+            function renderHistory() {
+                historyTableBody.innerHTML = '';
+                historyEmptyState.classList.toggle('hidden', state.history.length === 0);
+                if (state.history.length === 0) return;
+                state.history.forEach(entry => {
+                    const findingTypes = [...new Set((entry.findings || []).map(f => f.type))];
+                    const findingsHTML = findingTypes.map(f => `<div class="w-4 h-4 rounded-full" style="background-color: ${issueTypes[f]?.color || '#9ca3af'}" title="${issueTypes[f]?.label || f}"></div>`).join('');
+                    const listRow = document.createElement('tr');
+                    listRow.className = 'border-b'; listRow.style.borderColor = 'var(--border-color)';
+                    /* MODIFICADO: Añadido export-srt-history */
+                    listRow.innerHTML = `<td class="p-4"><i data-lucide="${entry.type === 'video' ? 'video' : 'image'}"></i></td><td class="p-4">${entry.name}</td><td class="p-4">${entry.date}</td><td class="p-4"><div class="flex items-center space-x-2">${findingTypes.length > 0 ? findingsHTML : 'OK'}</div></td><td class="p-4 text-right flex justify-end space-x-2"><div class="dropdown"><button class="p-2 rounded-full hover:bg-blue-500/20"><i data-lucide="download"></i></button><div class="dropdown-content"><a href="#" class="export-srt-history" data-id="${entry.id}">Exportar .SRT</a><a href="#" class="export-csv-history" data-id="${entry.id}">Exportar CSV</a><a href="#" class="export-xml-history" data-id="${entry.id}">Exportar XML</a><a href="#" class="export-html-history" data-id="${entry.id}">Exportar HTML</a></div></div><button data-id="${entry.id}" class="delete-history-btn p-2 rounded-full hover:bg-red-500/20"><i data-lucide="trash-2"></i></button></td>`;
+                    historyTableBody.appendChild(listRow);
+                });
+                lucide.createIcons();
+                addHistoryActionListeners();
+            }
+
+            function addHistoryActionListeners() {
+                document.querySelectorAll('.delete-history-btn').forEach(btn => btn.addEventListener('click', e => { const id = parseInt(e.currentTarget.dataset.id); state.history = state.history.filter(entry => entry.id !== id); localStorage.setItem('analyzerHistory', JSON.stringify(state.history)); renderHistory(); }));
+                /* MODIFICADO: Listener para exportar SRT desde el historial */
+                document.querySelectorAll('.export-srt-history').forEach(btn => btn.addEventListener('click', e => {
+                    e.preventDefault();
+                    const id = parseInt(e.currentTarget.dataset.id);
+                    const entry = state.history.find(item => item.id === id);
+                    if (entry && entry.srt) {
+                        download(`${entry.name}.srt`, entry.srt);
+                    } else {
+                        alert('No se encontró transcripción para este reporte.');
+                    }
+                }));
+                // History CSV export
+                document.querySelectorAll('.export-csv-history').forEach(btn => btn.addEventListener('click', e => {
+                    e.preventDefault();
+                    const id = parseInt(e.currentTarget.dataset.id);
+                    const entry = state.history.find(item => item.id === id);
+                    if (!entry || !entry.findings || entry.findings.length === 0) { alert('No hay hallazgos para exportar.'); return; }
+                    let csvContent = "Tipo de Archivo,Nombre de Archivo,Timestamp (seg),Tipo de Reporte,Mensaje\r\n";
+                    entry.findings.forEach(item => {
+                        const row = [entry.type === 'video' ? 'Video' : 'Imagen', entry.name, item.time || 0, item.label || item.type, `"${(item.description || item.issue || item.text || '').replace(/"/g, '""')}"`].join(",");
+                        csvContent += row + "\r\n";
+                    });
+                    download(`${entry.name}.csv`, csvContent);
+                }));
+                // History XML export (NLE-compatible)
+                document.querySelectorAll('.export-xml-history').forEach(btn => btn.addEventListener('click', e => {
+                    e.preventDefault();
+                    const id = parseInt(e.currentTarget.dataset.id);
+                    const entry = state.history.find(item => item.id === id);
+                    if (!entry || !entry.findings || entry.findings.length === 0) { alert('No hay hallazgos para exportar.'); return; }
+                    const duration = typeof entry.duration === 'string' ? parseFloat(entry.duration.split(':').reduce((a, b) => a * 60 + parseFloat(b), 0)) : (entry.duration || 60);
+                    exportNleXml(entry.findings, entry.name, duration);
+                }));
+                // History HTML export
+                document.querySelectorAll('.export-html-history').forEach(btn => btn.addEventListener('click', e => {
+                    e.preventDefault();
+                    const id = parseInt(e.currentTarget.dataset.id);
+                    const entry = state.history.find(item => item.id === id);
+                    if (!entry || !entry.findings || entry.findings.length === 0) { alert('No hay hallazgos para exportar.'); return; }
+                    let htmlContent = `<html><head><title>Reporte - ${entry.name}</title><style>body{font-family: sans-serif; background: #13161C; color: white;} h1{color: #0AE98A;} table{width: 100%; border-collapse: collapse;} th,td{padding: 8px 12px; border: 1px solid #2A2D35; text-align: left;}</style></head><body>`;
+                    htmlContent += `<h1>Reporte de Análisis: ${entry.name}</h1>`;
+                    htmlContent += `<table><thead><tr><th>Timestamp</th><th>Tipo</th><th>Descripción</th></tr></thead><tbody>`;
+                    entry.findings.forEach(item => {
+                        htmlContent += `<tr><td>${formatTime(item.time || 0)}</td><td>${item.label || item.type || ''}</td><td>${item.description || item.issue || item.text || ''}</td></tr>`;
+                    });
+                    htmlContent += `</tbody></table></body></html>`;
+                    download(`${entry.name}.html`, htmlContent);
+                }));
+            }
+
+            /* ... (Lógica del Resizer y funciones restantes sin cambios) ... */
+            const resizer = document.getElementById('resizer');
+            let isResizing = false;
+            resizer.addEventListener('mousedown', () => { isResizing = true; document.body.style.cursor = 'col-resize'; });
+            document.addEventListener('mousemove', (e) => { if (!isResizing) return; const newWidth = window.innerWidth - e.clientX - 20; if (newWidth > 350 && newWidth < 800) { videoSidePanel.style.width = `${newWidth}px`; } });
+            document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; });
+            // --- INICIA EL CÓDIGO PEGADO ---
+
+            // Referencias a los nuevos elementos HTML
+            const statusIndicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            const enterAppBtn = document.getElementById('enter-app-btn');
+            const loader = statusIndicator.querySelector('.loader-container');
+
+            async function checkBackendStatus() {
+                try {
+                    const response = await fetch('http://localhost:8000/api/status');
+                    const data = await response.json();
+
+                    if (data.models) state.modelStatus = data.models;
+
+                    if (data.status === 'ready') {
+                        state.backendStatus = 'ready';
+                        statusIndicator.style.backgroundColor = 'var(--success-color)';
+                        statusIndicator.style.color = 'var(--bg-primary)';
+                        loader.innerHTML = '<i data-lucide="check" class="text-black"></i>';
+                        statusText.textContent = 'Servidor Listo';
+                        enterAppBtn.disabled = false;
+                        enterAppBtn.style.opacity = '1';
+                        enterAppBtn.textContent = 'Entrar a la Aplicación';
+
+                    } else if (data.status === 'warning') {
+                        state.backendStatus = 'warning';
+                        statusIndicator.style.backgroundColor = 'var(--warning-color)';
+                        statusIndicator.style.color = 'var(--bg-primary)';
+                        loader.innerHTML = '<i data-lucide="alert-triangle" class="text-black"></i>';
+                        statusText.textContent = data.message;
+                        enterAppBtn.disabled = false;
+                        enterAppBtn.style.opacity = '1';
+                        enterAppBtn.textContent = 'Entrar (Funcionalidad Parcial)';
+
+                    } else { // 'error'
+                        state.backendStatus = 'error';
+                        statusIndicator.style.backgroundColor = 'var(--critical-color)';
+                        loader.innerHTML = '<i data-lucide="x" class="text-white"></i>';
+                        statusText.textContent = data.message;
+                        enterAppBtn.disabled = true;
+                        enterAppBtn.textContent = 'Error del Servidor';
+                    }
+
+                } catch (e) {
+                    state.backendStatus = 'error';
+                    statusIndicator.style.backgroundColor = 'var(--critical-color)';
+                    loader.innerHTML = '<i data-lucide="x" class="text-white"></i>';
+                    statusText.textContent = 'Error: No se pudo conectar al backend. (¿Está uvicorn corriendo?)';
+                    enterAppBtn.disabled = true;
+                    enterAppBtn.textContent = 'Error de Conexión';
+                }
+                lucide.createIcons();
+                updateBackendStatusUI();
+            }
+
+            // Listener para el nuevo botón de "Entrar" (con autenticación)
+            enterAppBtn.addEventListener('click', () => {
+                const emailInput = document.getElementById('login-email');
+                const passwordInput = document.getElementById('login-password');
+                const email = emailInput ? emailInput.value.trim() : '';
+                const password = passwordInput ? passwordInput.value : '';
+
+                if (email === 'design@platzi.com' && password === '12345') {
+                    state.isAuthenticated = true;
+                    localStorage.setItem('analyzerAuth', 'true');
+                    navigateTo('welcome-screen');
+                } else if (email === '' && password === '') {
+                    alert('Ingresa tus credenciales.');
+                } else {
+                    alert('Credenciales incorrectas.');
+                }
+            });
+
+            // Llamamos a la función para que se ejecute al cargar la página
+            checkBackendStatus();
+            // --- INICIA EL CÓDIGO PEGADO ---
+
+            // Listeners para los nuevos botones de navegación del dashboard
+            document.getElementById('goto-video-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                navigateTo('video-screen'); // Navega a la pantalla de video
+            });
+
+            document.getElementById('goto-images-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                navigateTo('images-screen'); // Navega a la pantalla de imágenes
+            });
+
+            // --- TERMINA EL CÓDIGO PEGADO ---
+            renderAnalysisToggles(); // <-- PEGA ESTA LÍNEA
+            // --- INICIA EL CÓDIGO PEGADO ---
+
+            // ============================================
+            // LÓGICA DE CARGA DE ARCHIVOS DE VIDEO
+            // ============================================
+
+            // Abrir el selector de archivos al hacer clic en la zona
+            videoDropZone.addEventListener('click', () => videoFileInput.click());
+            addMoreVideosBtn.addEventListener('click', () => videoFileInput.click());
+
+            // Manejar el evento 'change' del input (cuando se seleccionan archivos)
+            videoFileInput.addEventListener('change', (e) => {
+                handleVideoFiles(e.target.files);
+                videoFileInput.value = null; // Resetear el input
+            });
+
+            // Efectos visuales de arrastrar y soltar
+            videoDropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                videoDropZone.classList.add('dragover');
+            });
+            videoDropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                videoDropZone.classList.remove('dragover');
+            });
+            videoDropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                videoDropZone.classList.remove('dragover');
+                handleVideoFiles(e.dataTransfer.files);
+            });
+
+            function handleVideoFiles(files) {
+                const newFiles = Array.from(files).filter(file =>
+                    (file.type === 'video/mp4' || file.type === 'video/quicktime') &&
+                    !state.videoQueue.some(vf => vf.name === file.name) // Evitar duplicados
+                );
+
+                state.videoQueue.push(...newFiles);
+
+                if (state.videoQueue.length > 0) {
+                    videoDropZone.classList.add('hidden');
+                    videoPlayerContainer.classList.remove('hidden');
+                    videoQueuePanel.classList.remove('hidden');
+                    startVideoAnalysisBtn.disabled = false;
+                }
+
+                if (!state.currentVideoFile) {
+                    // Si no hay video activo, selecciona el primero
+                    selectVideoFromQueue(state.videoQueue[0]);
+                }
+                renderVideoQueue();
+            }
+
+            function renderVideoQueue() {
+                videoQueueList.innerHTML = '';
+                state.videoQueue.forEach(file => {
+                    const fileURL = URL.createObjectURL(file);
+                    const item = document.createElement('div');
+                    item.className = 'video-queue-item flex items-center justify-between p-3 rounded-lg cursor-pointer border-l-4';
+                    item.style.backgroundColor = 'var(--bg-secondary)';
+                    item.style.borderColor = 'transparent';
+                    item.dataset.fileName = file.name;
+
+                    item.innerHTML = `
+                        <div class="flex items-center min-w-0">
+                            <i data-lucide="film" class="w-5 h-5 mr-3 flex-shrink-0"></i>
+                            <span class="truncate text-sm">${file.name}</span>
+                        </div>
+                        <button class="remove-from-queue-btn flex-shrink-0 p-1 rounded-full hover:bg-gray-700">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    `;
+
+                    // Clic para seleccionar video
+                    item.querySelector('.flex').addEventListener('click', () => selectVideoFromQueue(file));
+
+                    // Clic para borrar de la cola
+                    item.querySelector('.remove-from-queue-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        removeVideoFromQueue(file);
+                    });
+
+                    videoQueueList.appendChild(item);
+                });
+
+                updateQueueActiveState();
+                lucide.createIcons();
+            }
+
+            function selectVideoFromQueue(file) {
+                const timelineMarkers = document.getElementById('timeline-markers');
+
+                if (!file) {
+                    state.currentVideoFile = null;
+                    state.currentVideoDuration = 0;
+                    videoPlayer.src = '';
+                    videoFilename.textContent = '';
+                    if (timelineMarkers) timelineMarkers.innerHTML = '';
+                    videoAnalysisSetup.classList.remove('hidden');
+                    videoReportPanel.classList.add('hidden');
+                    return;
+                }
+
+                state.currentVideoFile = file;
+                const fileURL = URL.createObjectURL(file);
+                videoPlayer.src = fileURL;
+                videoFilename.textContent = file.name;
+
+                if (timelineMarkers) timelineMarkers.innerHTML = '';
+
+                // Resetea panel por defecto
+                videoAnalysisSetup.classList.remove('hidden');
+                videoReportPanel.classList.add('hidden');
+
+                // Cargar duración del video y chequear memoria
+                videoPlayer.onloadedmetadata = () => {
+                    state.currentVideoDuration = videoPlayer.duration;
+
+                    if (state.analysisResults[file.name]) {
+                        state.currentReport = state.analysisResults[file.name].report;
+                        const formattedReport = transformApiResultsToReport(state.currentReport);
+                        renderVideoReport(formattedReport);
+                        videoAnalysisSetup.classList.add('hidden');
+                        videoReportPanel.classList.remove('hidden');
+                    }
+                };
+
+                updateQueueActiveState();
+            }
+
+            function removeVideoFromQueue(file) {
+                state.videoQueue = state.videoQueue.filter(f => f.name !== file.name);
+
+                if (state.currentVideoFile && state.currentVideoFile.name === file.name) {
+                    // Si borramos el video activo, seleccionamos el siguiente (o ninguno)
+                    selectVideoFromQueue(state.videoQueue[0] || null);
+                }
+
+                if (state.videoQueue.length === 0) {
+                    // Si la cola está vacía, mostrar la zona de drop
+                    videoDropZone.classList.remove('hidden');
+                    videoPlayerContainer.classList.add('hidden');
+                    videoQueuePanel.classList.add('hidden');
+                    startVideoAnalysisBtn.disabled = true;
+                    videoPlayer.src = '';
+                    videoFilename.textContent = '';
+                }
+
+                renderVideoQueue();
+            }
+
+            function updateQueueActiveState() {
+                document.querySelectorAll('.video-queue-item').forEach(item => {
+                    if (state.currentVideoFile && item.dataset.fileName === state.currentVideoFile.name) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+            }
+
+            // --- TERMINA EL CÓDIGO PEGADO ---
+
+            // ============================================
+            // SETTINGS PAGE
+            // ============================================
+            const imageAnalysisTypeKeys = ['ocr', 'contrast', 'centering', 'quantifier'];
+            const imageAnalysisTypeLabels = { ocr: 'Ortografía (OCR)', contrast: 'Contraste (WCAG)', centering: 'Centrado', quantifier: 'Visual Quantifier' };
+
+            function renderSettingsPage() {
+                const exclInput = document.getElementById('settings-excluded-words');
+                const dictInput = document.getElementById('settings-custom-dictionary');
+                if (exclInput) exclInput.value = state.settings.excludedWords || '';
+                if (dictInput) dictInput.value = state.settings.customDictionary || '';
+
+                // Video default toggles
+                const videoContainer = document.getElementById('settings-default-video-types');
+                if (videoContainer) {
+                    videoContainer.innerHTML = '';
+                    Object.entries(issueTypes).forEach(([key, { label, color }]) => {
+                        const btn = document.createElement('button');
+                        btn.className = 'analysis-btn text-sm';
+                        btn.dataset.label = key;
+                        btn.style.setProperty('--cat-color', color);
+                        btn.textContent = label;
+                        if ((state.settings.defaultAnalysisTypes || []).includes(key)) btn.classList.add('active');
+                        btn.addEventListener('click', () => btn.classList.toggle('active'));
+                        videoContainer.appendChild(btn);
+                    });
+                }
+
+                // Image default toggles
+                const imgContainer = document.getElementById('settings-default-image-types');
+                if (imgContainer) {
+                    imgContainer.innerHTML = '';
+                    imageAnalysisTypeKeys.forEach(key => {
+                        const btn = document.createElement('button');
+                        btn.className = 'analysis-btn text-sm';
+                        btn.dataset.label = key;
+                        btn.textContent = imageAnalysisTypeLabels[key] || key;
+                        if ((state.settings.defaultImageAnalysisTypes || []).includes(key)) btn.classList.add('active');
+                        btn.addEventListener('click', () => btn.classList.toggle('active'));
+                        imgContainer.appendChild(btn);
+                    });
+                }
+            }
+
+            document.getElementById('save-settings-btn').addEventListener('click', () => {
+                state.settings.excludedWords = document.getElementById('settings-excluded-words').value.trim();
+                state.settings.customDictionary = document.getElementById('settings-custom-dictionary').value.trim();
+                state.settings.defaultAnalysisTypes = Array.from(document.querySelectorAll('#settings-default-video-types .analysis-btn.active')).map(b => b.dataset.label);
+                state.settings.defaultImageAnalysisTypes = Array.from(document.querySelectorAll('#settings-default-image-types .analysis-btn.active')).map(b => b.dataset.label);
+                localStorage.setItem('analyzerSettings', JSON.stringify(state.settings));
+                alert('Configuración guardada.');
+            });
+
+            // Apply default toggles when rendering analysis panels
+            function applyDefaultVideoToggles() {
+                const defaults = state.settings.defaultAnalysisTypes || [];
+                document.querySelectorAll('#analysis-types-container .analysis-btn').forEach(btn => {
+                    if (defaults.includes(btn.dataset.label)) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+                // Pre-populate video excluded words
+                const videoExclInput = document.getElementById('video-excluded-words');
+                if (videoExclInput) videoExclInput.value = state.settings.excludedWords || '';
+            }
+
+            function applyDefaultImageToggles() {
+                const defaults = state.settings.defaultImageAnalysisTypes || [];
+                document.querySelectorAll('#image-analysis-types .analysis-btn').forEach(btn => {
+                    if (defaults.includes(btn.dataset.label)) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+                // Pre-populate image excluded words
+                const imgExclInput = document.getElementById('image-excluded-words');
+                if (imgExclInput && state.settings.excludedWords) imgExclInput.value = state.settings.excludedWords;
+            }
+
+            // ============================================
+            // STATUS PAGE
+            // ============================================
+            function renderStatusPage() {
+                const container = document.getElementById('model-status-cards');
+                if (!container) return;
+                container.innerHTML = '';
+
+                const models = state.modelStatus || {};
+                if (Object.keys(models).length === 0) {
+                    container.innerHTML = '<p class="text-secondary">No hay información de modelos disponible. Verifica la conexión.</p>';
+                    return;
+                }
+
+                Object.entries(models).forEach(([name, info]) => {
+                    const isLoaded = info.status === 'loaded';
+                    const card = document.createElement('div');
+                    card.className = 'rounded-lg p-4';
+                    card.style.backgroundColor = 'var(--bg-panels)';
+                    card.style.border = `1px solid ${isLoaded ? 'var(--success-color)' : 'var(--critical-color)'}`;
+                    card.innerHTML = `
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="w-3 h-3 rounded-full" style="background-color: ${isLoaded ? 'var(--success-color)' : 'var(--critical-color)'}"></div>
+                            <h4 class="font-bold text-lg">${name}</h4>
+                        </div>
+                        <p class="text-sm text-secondary">${info.message || ''}</p>
+                        <span class="text-xs mt-1 inline-block px-2 py-0.5 rounded" style="background-color: ${isLoaded ? 'rgba(10,233,138,0.15)' : 'rgba(255,68,68,0.15)'}; color: ${isLoaded ? 'var(--success-color)' : 'var(--critical-color)'};">${isLoaded ? 'Cargado' : 'Error'}</span>
+                    `;
+                    container.appendChild(card);
+                });
+                lucide.createIcons();
+            }
+
+            document.getElementById('refresh-status-btn').addEventListener('click', async () => {
+                await checkBackendStatus();
+                renderStatusPage();
+            });
+
+            // ============================================
+            // SYNTHESIS LOG PAGE
+            // ============================================
+            function renderSynthesisLog() {
+                const container = document.getElementById('synthesis-log-entries');
+                const emptyMsg = document.getElementById('synthesis-log-empty');
+                if (!container) return;
+
+                const entries = state.synthesisLog || [];
+                if (entries.length === 0) {
+                    container.innerHTML = '';
+                    container.appendChild(emptyMsg);
+                    emptyMsg.classList.remove('hidden');
+                    return;
+                }
+
+                emptyMsg.classList.add('hidden');
+                container.innerHTML = '';
+
+                // Reverse chronological
+                [...entries].reverse().forEach(entry => {
+                    const card = document.createElement('div');
+                    card.className = 'rounded-lg p-4';
+                    card.style.backgroundColor = 'var(--bg-panels)';
+                    card.style.border = '1px solid var(--border-color)';
+
+                    const d = entry.details || {};
+                    const issues = d.issues || {};
+                    const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString('es-ES') : 'N/A';
+
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="font-bold">${ts}</h4>
+                            <span class="text-xs px-2 py-1 rounded" style="background-color: var(--bg-secondary);">${entry.type || 'video'}</span>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <div><span class="text-secondary">Segmentos Audio:</span> <strong>${d.audio_segments || 0}</strong></div>
+                            <div><span class="text-secondary">Textos OCR:</span> <strong>${d.ocr_texts || 0}</strong></div>
+                            <div><span class="text-secondary">Frames:</span> <strong>${d.frames_analyzed || 0}</strong></div>
+                            <div><span class="text-secondary">Hallazgos Síntesis:</span> <strong>${issues.synthesis || 0}</strong></div>
+                        </div>
+                        ${entry.synthesis_findings && entry.synthesis_findings.length > 0 ? `
+                        <div class="mt-3 pt-3 border-t" style="border-color: var(--border-color);">
+                            <p class="text-sm font-medium mb-1">Respuestas LLM:</p>
+                            ${entry.synthesis_findings.map(f => `<p class="text-sm text-secondary ml-2">- ${f.issue || JSON.stringify(f)}</p>`).join('')}
+                        </div>` : ''}
+                    `;
+                    container.appendChild(card);
+                });
+            }
+
+            // ============================================
+            // NLE-COMPATIBLE XML EXPORT
+            // ============================================
+            function exportNleXml(report, filename, videoDuration) {
+                const fps = 29.97;
+
+                // --- FCPXML 1.9 (DaVinci Resolve) ---
+                let fcpxml = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE fcpxml>\n<fcpxml version="1.9">\n`;
+                fcpxml += `  <resources>\n    <format id="r1" name="FFVideoFormat1080p2997" frameDuration="1001/30000s" width="1920" height="1080"/>\n  </resources>\n`;
+                fcpxml += `  <library>\n    <event name="Analyzer 2.0 - ${filename}">\n      <project name="${filename}">\n`;
+
+                const totalFrames = Math.ceil(videoDuration * fps);
+                const durationRational = `${Math.round(totalFrames * 1001)}/30000s`;
+                fcpxml += `        <sequence format="r1" duration="${durationRational}">\n          <spine>\n`;
+                fcpxml += `            <gap name="Gap" offset="0/30000s" duration="${durationRational}" start="0/30000s">\n`;
+
+                report.forEach(item => {
+                    const startFrame = Math.round(item.time * fps);
+                    const startRational = `${startFrame * 1001}/30000s`;
+                    const markerDuration = `1001/30000s`;
+                    const safeDesc = (item.description || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    fcpxml += `              <marker start="${startRational}" duration="${markerDuration}" value="[${item.label}] ${safeDesc}"/>\n`;
+                });
+
+                fcpxml += `            </gap>\n          </spine>\n        </sequence>\n      </project>\n    </event>\n  </library>\n</fcpxml>`;
+
+                // --- FCP7 XML / xmeml v5 (Premiere Pro) ---
+                let xmeml = `<?xml version="1.0" encoding="UTF-8"?>\n<xmeml version="5">\n  <sequence>\n    <name>${filename}</name>\n`;
+                xmeml += `    <duration>${Math.round(videoDuration * fps)}</duration>\n`;
+                xmeml += `    <rate><timebase>${Math.round(fps)}</timebase><ntsc>TRUE</ntsc></rate>\n`;
+                xmeml += `    <media><video><track></track></video></media>\n`;
+
+                report.forEach(item => {
+                    const inFrame = Math.round(item.time * fps);
+                    const outFrame = inFrame + 1;
+                    const safeDesc = (item.description || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    xmeml += `    <marker>\n      <name>[${item.label}] ${safeDesc}</name>\n      <in>${inFrame}</in>\n      <out>${outFrame}</out>\n    </marker>\n`;
+                });
+
+                xmeml += `  </sequence>\n</xmeml>`;
+
+                // Download both
+                download(`${filename}.fcpxml`, fcpxml);
+                setTimeout(() => download(`${filename}.xml`, xmeml), 200);
+            }
+
+            // Apply defaults on initial render
+            applyDefaultVideoToggles();
+            applyDefaultImageToggles();
+
+            // On page load: check auth state
+            if (state.isAuthenticated) {
+                navigateTo('welcome-screen');
+            } else {
+                navigateTo('login-screen');
+            }
+
+            // --- LIGHTBOX LOGIC ---
+            const lightbox = document.getElementById('chart-lightbox');
+            // Elementos del DOM ya no son img, sino canvas container
+            const lightboxDetails = document.getElementById('lightbox-details');
+            const lightboxCloseBtn = document.getElementById('lightbox-close-btn');
+
+            // Lightbox Gallery State
+            let lightboxChartInstance = null;
+            let currentLightboxIndex = 0;
+
+            // Re-declare DOM elements for clarity and new ones
+            // const lightbox = document.getElementById('chart-lightbox'); // Already declared above
+            // const lightboxDetails = document.getElementById('lightbox-details'); // Already declared above
+            const lightboxImg = document.getElementById('lightbox-source-img');
+            const lightboxFilename = document.getElementById('lightbox-filename');
+            const btnPrev = document.getElementById('lightbox-prev-btn');
+            const btnNext = document.getElementById('lightbox-next-btn');
+
+            function openLightbox(index) {
+                if (!state.currentImageResults || !state.currentImageResults[index]) return;
+                currentLightboxIndex = index;
+                renderLightboxContent();
+                lightbox.classList.remove('hidden');
+                document.addEventListener('keydown', handleLightboxKeys);
+                lucide.createIcons();
+            }
+
+            function renderLightboxContent() {
+                const res = state.currentImageResults[currentLightboxIndex];
+                const originalFile = state.imagesToAnalyze[currentLightboxIndex];
+
+                // 1. Set Image
+                if (originalFile) {
+                    const url = URL.createObjectURL(originalFile);
+                    lightboxImg.src = url;
+                    lightboxFilename.textContent = originalFile.name;
+                }
+
+                // 2. Navigation State
+                btnPrev.disabled = currentLightboxIndex === 0;
+                btnNext.disabled = currentLightboxIndex === state.currentImageResults.length - 1;
+                btnPrev.style.opacity = btnPrev.disabled ? '0.3' : '1';
+                btnNext.style.opacity = btnNext.disabled ? '0.3' : '1';
+
+                // 3. Render Details
+                const qData = res.quantifier_data;
+                if (!qData || qData.error) {
+                    lightboxDetails.innerHTML = `<p class="text-red-400">Datos de Visual Quantifier no disponibles para esta imagen.</p>`;
+                    if (lightboxChartInstance) lightboxChartInstance.destroy();
+                    return;
+                }
+
+                const scores = qData.analisis || {};
+                let detailsHtml = `
+                    <div class="mb-4">
+                        <h2 class="text-2xl font-bold text-white mb-1">Análisis Visual 5-Axis</h2>
+                        <div class="flex items-center gap-4">
+                            <p class="text-gray-400">Score Global: <span class="text-accent font-bold text-lg">${qData.score_promedio}</span></p>
+                        </div>
+                        <p class="text-gray-400 italic mt-2 text-sm border-l-4 border-accent pl-2">"${qData.conclusion}"</p>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3">
+                `;
+
+                detailsHtml += Object.entries(scores).map(([key, val]) => `
+                    <div>
+                        <div class="flex justify-between items-center mb-0.5">
+                            <h4 class="font-bold uppercase text-accent text-xs">${key.replace('_', ' ')}</h4>
+                            <span class="text-white font-bold bg-gray-800 px-1.5 py-0.5 rounded text-[10px]">${val.score}/10</span>
+                        </div>
+                        <p class="text-gray-400 text-xs leading-tight">${val.razon}</p>
+                    </div>
+                `).join('');
+                detailsHtml += `</div>`;
+
+                lightboxDetails.innerHTML = detailsHtml;
+
+                // 4. Render High-Res Chart
+                setTimeout(() => {
+                    const ctx = document.getElementById('lightbox-chart-canvas').getContext('2d');
+                    if (lightboxChartInstance) lightboxChartInstance.destroy();
+
+                    lightboxChartInstance = new Chart(ctx, {
+                        type: 'radar',
+                        data: {
+                            labels: ['Moderno', 'Enseña', 'Buen Diseño', 'Humano', 'Tipográfico'],
+                            datasets: [{
+                                label: 'Impacto Visual',
+                                data: [
+                                    scores.moderno?.score || 0,
+                                    scores.ensena?.score || 0,
+                                    scores.buen_diseno?.score || 0,
+                                    scores.humano?.score || 0,
+                                    scores.tipografico?.score || 0
+                                ],
+                                fill: true,
+                                backgroundColor: 'rgba(10, 233, 138, 0.2)',
+                                borderColor: '#0AE98A',
+                                borderWidth: 4,
+                                pointBackgroundColor: '#0AE98A',
+                                pointRadius: 6,
+                                pointHoverRadius: 8
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            elements: { line: { tension: 0.1 } }, // Sharper lines
+                            scales: {
+                                r: {
+                                    angleLines: { color: 'rgba(255, 255, 255, 0.15)' },
+                                    grid: { color: 'rgba(255, 255, 255, 0.15)', circular: true },
+                                    pointLabels: {
+                                        color: '#fff',
+                                        font: { size: 16, weight: 'bold', family: "'DM Sans', sans-serif" },
+                                        padding: 20
+                                    },
+                                    suggestedMin: 0, requestedMax: 10,
+                                    ticks: { display: false, stepSize: 2 }
+                                }
+                            },
+                            layout: { padding: 10 },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                }, 50);
+            }
+
+            // Navigation Handlers
+            function prevImage() {
+                if (currentLightboxIndex > 0) {
+                    currentLightboxIndex--;
+                    renderLightboxContent();
+                }
+            }
+
+            function nextImage() {
+                if (currentLightboxIndex < state.currentImageResults.length - 1) {
+                    currentLightboxIndex++;
+                    renderLightboxContent();
+                }
+            }
+
+            function handleLightboxKeys(e) {
+                if (e.key === 'ArrowLeft') prevImage();
+                if (e.key === 'ArrowRight') nextImage();
+                if (e.key === 'Escape') closeLightbox();
+            }
+
+            btnPrev.addEventListener('click', prevImage);
+            btnNext.addEventListener('click', nextImage);
+
+            function closeLightbox() {
+                lightbox.classList.add('hidden');
+                document.removeEventListener('keydown', handleLightboxKeys); // Cleanup
+            }
+
+            if (lightboxCloseBtn) lightboxCloseBtn.addEventListener('click', closeLightbox);
+            if (lightbox) lightbox.addEventListener('click', (e) => {
+                if (e.target === lightbox) closeLightbox();
+            });
+
+        });
+    </script>
+
+    <!-- LIGHTBOX HTML -->
+    <div id="chart-lightbox"
+        class="fixed inset-0 bg-black bg-opacity-95 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
+
+        <!-- Navigation Buttons -->
+        <button id="lightbox-prev-btn"
+            class="absolute left-4 text-white hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors z-50 p-2">
+            <i data-lucide="chevron-left" class="w-12 h-12"></i>
+        </button>
+        <button id="lightbox-next-btn"
+            class="absolute right-4 text-white hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors z-50 p-2">
+            <i data-lucide="chevron-right" class="w-12 h-12"></i>
+        </button>
+
+        <div
+            class="bg-gray-900 rounded-xl overflow-hidden max-w-7xl w-full h-[90vh] flex relative border border-gray-700 shadow-2xl">
+            <button id="lightbox-close-btn"
+                class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors z-50 bg-black bg-opacity-50 rounded-full p-1">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+
+            <!-- LEFT COLUMN: IMAGE -->
+            <div class="w-1/2 bg-black flex items-center justify-center relative border-r border-gray-800">
+                <img id="lightbox-source-img" class="max-w-full max-h-full object-contain" src="" alt="Analyzed Image">
+                <div
+                    class="absolute bottom-4 left-4 bg-black bg-opacity-70 text-white px-3 py-1 rounded text-sm font-mono">
+                    <span id="lightbox-filename">filename.png</span>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: CHART & DETAILS -->
+            <div class="w-1/2 flex flex-col h-full bg-gray-900">
+                <!-- CHART SECTION (Top 60%) -->
+                <div class="h-[60%] p-6 relative flex items-center justify-center border-b border-gray-800 bg-gray-900">
+                    <canvas id="lightbox-chart-canvas" class="w-full h-full"></canvas>
+                </div>
+
+                <!-- DETAILS SECTION (Bottom 40%) -->
+                <div class="h-[40%] overflow-y-auto p-6 bg-gray-900">
+                    <div id="lightbox-details" class="space-y-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    </div>
+    </div>
+</body>
+
+</html>

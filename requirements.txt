@@ -1,0 +1,23 @@
+# --- Servidor Web ---
+fastapi
+uvicorn
+python-multipart
+
+# --- Procesamiento de Video/Audio ---
+torch
+torchaudio
+pydub
+opencv-python-headless
+ffmpeg-python
+scikit-image
+numpy
+
+# --- Modelos de IA (Carga y Transcripción) ---
+llama-cpp-python
+openai-whisper
+
+# --- OCR ---
+easyocr
+
+# --- Procesamiento de Texto ---
+pyspellchecker
