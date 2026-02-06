@@ -796,18 +796,17 @@
                 <h2 class="text-3xl font-bold mb-6">Configuración</h2>
                 <div class="max-w-2xl space-y-6">
                     <div class="rounded-lg p-6" style="background-color: var(--bg-panels);">
-                        <h3 class="text-lg font-bold mb-3">Palabras Excluidas</h3>
-                        <p class="text-sm text-secondary mb-2">Palabras que no se marcarán como errores ortográficos (separadas por coma). Se aplica a video e imágenes.</p>
-                        <input type="text" id="settings-excluded-words" placeholder="marca, tech, app..."
-                            class="w-full p-3 rounded-md text-sm"
-                            style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
-                    </div>
-                    <div class="rounded-lg p-6" style="background-color: var(--bg-panels);">
                         <h3 class="text-lg font-bold mb-3">Diccionario Personalizado</h3>
-                        <p class="text-sm text-secondary mb-2">Palabras de marca o técnicas que no deben marcarse como errores (separadas por coma).</p>
-                        <input type="text" id="settings-custom-dictionary" placeholder="Platzi, JavaScript, DevOps..."
-                            class="w-full p-3 rounded-md text-sm"
-                            style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+                        <p class="text-sm text-secondary mb-2">Palabras de marca o técnicas que el OCR no debe marcar como errores. Escribe y presiona Enter o coma para agregar.</p>
+                        <div class="flex gap-2">
+                            <input type="text" id="settings-dict-input" placeholder="Escribe una palabra y presiona Enter..."
+                                class="flex-grow p-3 rounded-md text-sm"
+                                style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+                            <button id="add-dict-word-btn" class="px-4 rounded-md text-sm font-bold"
+                                style="background-color: var(--accent); color: var(--bg-primary);">Agregar</button>
+                        </div>
+                        <div id="dict-words-display" class="flex flex-wrap gap-2 mt-3 min-h-[2rem]"></div>
+                        <p id="dict-empty-msg" class="text-xs text-secondary mt-2 hidden">No hay palabras en el diccionario.</p>
                     </div>
                     <div class="rounded-lg p-6" style="background-color: var(--bg-panels);">
                         <h3 class="text-lg font-bold mb-3">Análisis de Video por Defecto</h3>
@@ -869,8 +868,7 @@
                 history: JSON.parse(localStorage.getItem('analyzerHistory')) || [],
                 synthesisLog: JSON.parse(localStorage.getItem('analyzerSynthesisLog') || '[]'),
                 settings: JSON.parse(localStorage.getItem('analyzerSettings')) || {
-                    excludedWords: '',
-                    customDictionary: '',
+                    customDictionary: [],
                     defaultAnalysisTypes: ['silences', 'keywords', 'ocr', 'contrast', 'fillers', 'centering', 'black_frames'],
                     defaultImageAnalysisTypes: ['ocr', 'contrast', 'centering', 'quantifier']
                 }
@@ -1046,8 +1044,8 @@
                     const formData = new FormData();
                     const videoExcludedInput = document.getElementById('video-excluded-words');
                     const videoExcluded = videoExcludedInput ? videoExcludedInput.value : '';
-                    const dictWords = state.settings.customDictionary || '';
-                    const mergedExcluded = [state.settings.excludedWords, videoExcluded, dictWords].filter(Boolean).join(',');
+                    const dictWords = getDictWordsString();
+                    const mergedExcluded = [videoExcluded, dictWords].filter(Boolean).join(',');
                     formData.append('file', state.currentVideoFile);
                     formData.append('settings', JSON.stringify({
                         analysisTypes,
@@ -1443,8 +1441,7 @@
 
                 const analysisTypes = Array.from(document.querySelectorAll('#image-analysis-types .analysis-btn.active')).map(btn => btn.dataset.label);
                 const excludedWords = document.getElementById('image-excluded-words').value;
-                // Merge custom dictionary words into excluded words
-                const dictWords = state.settings.customDictionary || '';
+                const dictWords = getDictWordsString();
                 const mergedExcluded = [excludedWords, dictWords].filter(Boolean).join(',');
 
                 try {
@@ -2133,11 +2130,62 @@
             const imageAnalysisTypeKeys = ['ocr', 'contrast', 'centering', 'quantifier'];
             const imageAnalysisTypeLabels = { ocr: 'Ortografía (OCR)', contrast: 'Contraste (WCAG)', centering: 'Centrado', quantifier: 'Visual Quantifier' };
 
+            // Migrate old string-based customDictionary to array
+            if (typeof state.settings.customDictionary === 'string') {
+                state.settings.customDictionary = state.settings.customDictionary
+                    .split(',').map(w => w.trim()).filter(Boolean);
+                localStorage.setItem('analyzerSettings', JSON.stringify(state.settings));
+            }
+            if (!Array.isArray(state.settings.customDictionary)) {
+                state.settings.customDictionary = [];
+            }
+
+            function getDictWordsString() {
+                return (state.settings.customDictionary || []).join(',');
+            }
+
+            function addDictWord(word) {
+                const clean = word.trim();
+                if (!clean) return;
+                if (!state.settings.customDictionary.includes(clean)) {
+                    state.settings.customDictionary.push(clean);
+                    saveDictionary();
+                    renderDictWords();
+                }
+            }
+
+            function removeDictWord(word) {
+                state.settings.customDictionary = state.settings.customDictionary.filter(w => w !== word);
+                saveDictionary();
+                renderDictWords();
+            }
+
+            function saveDictionary() {
+                localStorage.setItem('analyzerSettings', JSON.stringify(state.settings));
+            }
+
+            function renderDictWords() {
+                const container = document.getElementById('dict-words-display');
+                const emptyMsg = document.getElementById('dict-empty-msg');
+                if (!container) return;
+                container.innerHTML = '';
+                const words = state.settings.customDictionary || [];
+                if (emptyMsg) emptyMsg.classList.toggle('hidden', words.length > 0);
+                words.forEach(word => {
+                    const chip = document.createElement('span');
+                    chip.className = 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm cursor-default';
+                    chip.style.cssText = 'background-color: rgba(10,233,138,0.15); color: var(--accent); border: 1px solid rgba(10,233,138,0.3);';
+                    chip.innerHTML = `${word}<button class="ml-1 hover:text-white" style="font-size:14px; line-height:1;">&times;</button>`;
+                    chip.querySelector('button').addEventListener('click', () => removeDictWord(word));
+                    container.appendChild(chip);
+                });
+            }
+
             function renderSettingsPage() {
-                const exclInput = document.getElementById('settings-excluded-words');
-                const dictInput = document.getElementById('settings-custom-dictionary');
-                if (exclInput) exclInput.value = state.settings.excludedWords || '';
-                if (dictInput) dictInput.value = state.settings.customDictionary || '';
+                // Dictionary input + words
+                const dictInput = document.getElementById('settings-dict-input');
+                if (dictInput) dictInput.value = '';
+                renderDictWords();
 
                 // Video default toggles
                 const videoContainer = document.getElementById('settings-default-video-types');
@@ -2171,9 +2219,26 @@
                 }
             }
 
+            // Add word via button or Enter/comma key
+            document.getElementById('add-dict-word-btn').addEventListener('click', () => {
+                const input = document.getElementById('settings-dict-input');
+                if (input && input.value.trim()) {
+                    input.value.split(',').forEach(w => addDictWord(w));
+                    input.value = '';
+                }
+            });
+            document.getElementById('settings-dict-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    const input = e.target;
+                    if (input.value.trim()) {
+                        input.value.split(',').forEach(w => addDictWord(w));
+                        input.value = '';
+                    }
+                }
+            });
+
             document.getElementById('save-settings-btn').addEventListener('click', () => {
-                state.settings.excludedWords = document.getElementById('settings-excluded-words').value.trim();
-                state.settings.customDictionary = document.getElementById('settings-custom-dictionary').value.trim();
                 state.settings.defaultAnalysisTypes = Array.from(document.querySelectorAll('#settings-default-video-types .analysis-btn.active')).map(b => b.dataset.label);
                 state.settings.defaultImageAnalysisTypes = Array.from(document.querySelectorAll('#settings-default-image-types .analysis-btn.active')).map(b => b.dataset.label);
                 localStorage.setItem('analyzerSettings', JSON.stringify(state.settings));
@@ -2190,9 +2255,6 @@
                         btn.classList.remove('active');
                     }
                 });
-                // Pre-populate video excluded words
-                const videoExclInput = document.getElementById('video-excluded-words');
-                if (videoExclInput) videoExclInput.value = state.settings.excludedWords || '';
             }
 
             function applyDefaultImageToggles() {
@@ -2204,9 +2266,6 @@
                         btn.classList.remove('active');
                     }
                 });
-                // Pre-populate image excluded words
-                const imgExclInput = document.getElementById('image-excluded-words');
-                if (imgExclInput && state.settings.excludedWords) imgExclInput.value = state.settings.excludedWords;
             }
 
             // ============================================
