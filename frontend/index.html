@@ -851,6 +851,13 @@
             lucide.createIcons();
 
             // ============================================
+            // API URL (localhost for dev, empty for Vercel prod)
+            // ============================================
+            const API_BASE_URL = window.location.hostname === 'localhost'
+                ? 'http://localhost:8000'
+                : 'https://va-backend-437207240188.us-central1.run.app';
+
+            // ============================================
             // ESTADO Y NAVEGACIÓN GLOBAL
             // ============================================
             /* MODIFICADO: Eliminado currentScriptFile */
@@ -1041,23 +1048,68 @@
                 updateLoaderTask('audio', 'processing', 'Procesando...');
 
                 try {
-                    const formData = new FormData();
                     const videoExcludedInput = document.getElementById('video-excluded-words');
                     const videoExcluded = videoExcludedInput ? videoExcludedInput.value : '';
                     const dictWords = getDictWordsString();
                     const mergedExcluded = [videoExcluded, dictWords].filter(Boolean).join(',');
-                    formData.append('file', state.currentVideoFile);
-                    formData.append('settings', JSON.stringify({
+                    const settingsJson = JSON.stringify({
                         analysisTypes,
                         depth,
                         excludedWords: mergedExcluded
-                    }));
+                    });
 
                     // ----- ¡CÓDIGO REAL ACTIVADO! -----
-                    const response = await fetch('http://localhost:8000/api/analyze/video', {
-                        method: 'POST',
-                        body: formData
-                    });
+                    const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB chunks
+                    const videoFile = state.currentVideoFile;
+                    let response;
+
+                    if (videoFile.size > CHUNK_SIZE) {
+                        // Chunked upload for large files
+                        const uploadId = crypto.randomUUID();
+                        const totalChunks = Math.ceil(videoFile.size / CHUNK_SIZE);
+                        console.log(`[Upload] Chunked: ${totalChunks} chunks, ${(videoFile.size/1024/1024).toFixed(1)}MB`);
+
+                        for (let i = 0; i < totalChunks; i++) {
+                            const start = i * CHUNK_SIZE;
+                            const end = Math.min(start + CHUNK_SIZE, videoFile.size);
+                            const chunkBlob = videoFile.slice(start, end);
+                            const chunkForm = new FormData();
+                            chunkForm.append('chunk', chunkBlob, `chunk_${i}`);
+                            chunkForm.append('upload_id', uploadId);
+                            chunkForm.append('chunk_index', i.toString());
+                            chunkForm.append('total_chunks', totalChunks.toString());
+                            chunkForm.append('filename', videoFile.name);
+
+                            const chunkRes = await fetch(`${API_BASE_URL}/api/upload/chunk`, {
+                                method: 'POST', body: chunkForm
+                            });
+                            if (!chunkRes.ok) throw new Error(`Error subiendo chunk ${i+1}/${totalChunks}`);
+                        }
+
+                        // Complete upload
+                        const completeForm = new FormData();
+                        completeForm.append('upload_id', uploadId);
+                        const completeRes = await fetch(`${API_BASE_URL}/api/upload/complete`, {
+                            method: 'POST', body: completeForm
+                        });
+                        if (!completeRes.ok) throw new Error('Error ensamblando archivo');
+
+                        // Analyze with upload_id
+                        const analyzeForm = new FormData();
+                        analyzeForm.append('upload_id', uploadId);
+                        analyzeForm.append('settings', settingsJson);
+                        response = await fetch(`${API_BASE_URL}/api/analyze/video`, {
+                            method: 'POST', body: analyzeForm
+                        });
+                    } else {
+                        // Direct upload for small files
+                        const formData = new FormData();
+                        formData.append('file', videoFile);
+                        formData.append('settings', settingsJson);
+                        response = await fetch(`${API_BASE_URL}/api/analyze/video`, {
+                            method: 'POST', body: formData
+                        });
+                    }
 
                     // (Simulamos las otras tareas mientras esperamos la respuesta final)
                     updateLoaderTask('audio', 'done');
@@ -1456,7 +1508,7 @@
                     updateLoaderTask('audio', 'done', 'OCR Completo');
                     updateLoaderTask('vision', 'processing', 'Analizando geometría...');
 
-                    const response = await fetch('http://localhost:8000/api/analyze/images', {
+                    const response = await fetch(`${API_BASE_URL}/api/analyze/images`, {
                         method: 'POST',
                         body: formData
                     });
@@ -1880,7 +1932,7 @@
 
             async function checkBackendStatus() {
                 try {
-                    const response = await fetch('http://localhost:8000/api/status');
+                    const response = await fetch(`${API_BASE_URL}/api/status`);
                     const data = await response.json();
 
                     if (data.models) state.modelStatus = data.models;

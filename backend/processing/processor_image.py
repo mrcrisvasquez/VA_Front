@@ -8,7 +8,7 @@ from . import analyzer_vision
 from . import analyzer_geometry
 from . import analyzer_synthesis
 
-def process_image(image_path: str, settings: Dict[str, Any], ocr_model: Any, qwen_vl_model: Any = None) -> Dict[str, Any]:
+def process_image(image_path: str, settings: Dict[str, Any]) -> Dict[str, Any]:
     """
     Función orquestadora para una sola imagen.
     Se beneficia automáticamente del pre-procesamiento (CLAHE) y Rescate (Upscaling)
@@ -34,10 +34,9 @@ def process_image(image_path: str, settings: Dict[str, Any], ocr_model: Any, qwe
             settings["analysisTypes"] = list(current_types)
             print("[ImageProcessor] Análisis técnico forzado por Quantifier.")
         
-        # 3. OCR con EasyOCR (incluye CLAHE + Upscaling interno)
+        # 3. OCR con Gemini
         ocr_results = analyzer_vision.get_text_and_boxes_from_frame(
             frame=frame,
-            ocr_model=ocr_model, 
             excluded_words=excluded_words
         )
         
@@ -73,7 +72,7 @@ def process_image(image_path: str, settings: Dict[str, Any], ocr_model: Any, qwe
         
         # 6. (NUEVO) Visual Quantifier 5-Axis
         # Solo si está habilitado en settings y tenemos el modelo
-        if settings.get("enableQuantifier", False) and qwen_vl_model:
+        if settings.get("enableQuantifier", False):
              # Generar contexto técnico para "Ground Truth"
              tech_context = []
              
@@ -91,7 +90,7 @@ def process_image(image_path: str, settings: Dict[str, Any], ocr_model: Any, qwe
 
              tech_context_str = "\n".join(tech_context)
              
-             quantifier_data = analyzer_synthesis.analyze_image_quantifier(image_path, qwen_vl_model, technical_context=tech_context_str)
+             quantifier_data = analyzer_synthesis.analyze_image_quantifier(image_path, technical_context=tech_context_str)
              final_report["quantifier_data"] = quantifier_data
         
         print(f"[ImageProcessor] Análisis completado: {image_path}")

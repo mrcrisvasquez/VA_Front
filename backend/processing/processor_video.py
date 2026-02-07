@@ -175,7 +175,7 @@ def consolidate_issues(issues: List[Dict[str, Any]], key_field: str, fps_interva
 
 # --- Orquestador Principal ---
 
-def process_video(video_path: str, settings: Dict[str, Any], models: Dict[str, Any]) -> Dict[str, Any]:
+def process_video(video_path: str, settings: Dict[str, Any]) -> Dict[str, Any]:
     tmp_audio_path = None
     audio_report = {} 
     whisper_segments = [] 
@@ -186,14 +186,13 @@ def process_video(video_path: str, settings: Dict[str, Any], models: Dict[str, A
         tmp_audio_path = extract_audio_from_video(video_path)
         if tmp_audio_path:
             audio_report, whisper_segments, srt_content = analyzer_audio.process_audio(
-                audio_path=tmp_audio_path, settings=settings,
-                whisper_model=models["whisper"], vad_model=models["silero_vad"] 
+                audio_path=tmp_audio_path, settings=settings
             )
 
         # 2. Frames
         frames_to_analyze = extract_smart_frames(video_path, settings["depth"])
         
-        print(f"[VideoProcessor] Analizando {len(frames_to_analyze)} frames con EasyOCR...")
+        print(f"[VideoProcessor] Analizando {len(frames_to_analyze)} frames con Gemini OCR...")
         
         # Listas temporales (antes de consolidar)
         raw_ocr_issues = []
@@ -219,7 +218,6 @@ def process_video(video_path: str, settings: Dict[str, Any], models: Dict[str, A
             # A. OCR y Detección
             ocr_results = analyzer_vision.get_text_and_boxes_from_frame(
                 frame=frame,
-                ocr_model=models["ocr"], 
                 excluded_words=settings.get("excludedWords", "").split(",")
             )
             
@@ -285,7 +283,7 @@ def process_video(video_path: str, settings: Dict[str, Any], models: Dict[str, A
         synthesis_log_entries = []
 
         if "synthesis" in settings.get("analysisTypes", []):
-            print(f"[VideoProcessor] Iniciando síntesis multimodal con Qwen...")
+            print(f"[VideoProcessor] Iniciando síntesis multimodal con Gemini...")
 
             # Calcular duración total
             total_duration = 0
@@ -304,7 +302,7 @@ def process_video(video_path: str, settings: Dict[str, Any], models: Dict[str, A
 
                 chunk_report = analyzer_synthesis.compare_audio_to_video(
                     whisper_segments=audio_chunk, ocr_data=ocr_chunk,
-                    silence_data=silence_chunk, qwen_model=models["qwen_vl"]
+                    silence_data=silence_chunk
                 )
                 synthesis_report.extend(chunk_report)
         else:

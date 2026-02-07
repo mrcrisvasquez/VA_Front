@@ -1,52 +1,18 @@
 import os
 import pydub
-import torch
-import numpy as np
-import whisper
 from typing import Dict, Any, List, Tuple
+from . import gemini_client
 
 # Palabras clave a buscar
 KEYWORDS_TO_FIND = ["pausa", "corte", "inicio", "grabando"]
 # Muletillas comunes
 FILLERS_TO_FIND = ["eh", "ehh", "ehhh", "um", "umm", "este", "o sea", "pues", "bueno"]
 
-def get_speech_timestamps(audio_path: str, vad_model: Any) -> List[Dict[str, int]]:
-    """
-    Usa Silero VAD para encontrar segmentos de voz.
-
-    NOTA: Esta función es un stub reservado para uso futuro. Está pensada para
-    chunking de audios muy largos (>30 min) donde Whisper necesitaría procesar
-    por segmentos de voz en lugar del archivo completo.
-
-    Silero VAD se mantiene cargado en main.py para este propósito futuro.
-    La detección de silencios actual usa pydub.silence.detect_silence() en
-    find_silences(), que es suficiente para el análisis de QA.
-
-    La llamada a esta función está comentada en process_audio() línea 108.
-    """
-    print("[AudioAnalyzer] Ejecutando VAD (simulado, procesando todo)")
-    return [{"start": 0, "end": -1}]
-
-def run_whisper(audio_path: str, whisper_model: Any, language: str) -> List[Dict[str, Any]]:
-    """Ejecuta OpenAI-Whisper en el archivo de audio."""
-    print(f"[AudioAnalyzer] Ejecutando OpenAI-Whisper (lang: {language})...")
-
-    # 'whisper_model' es el modelo ya cargado
-    result = whisper_model.transcribe(
-        audio_path, 
-        language=language if language != "auto" else None, 
-        fp16=False # fp16 no es compatible con MPS, usamos fp32
-    )
-
-    segments = []
-    for segment in result["segments"]:
-        segments.append({
-            "start": int(segment["start"] * 1000), # Convertir segundos a milisegundos
-            "end": int(segment["end"] * 1000),     # Convertir segundos a milisegundos
-            "text": segment["text"]
-        })
-
-    print("[AudioAnalyzer] Whisper completado.")
+def run_whisper(audio_path: str, language: str) -> List[Dict[str, Any]]:
+    """Transcribe audio using Gemini 2.0 Flash."""
+    print(f"[AudioAnalyzer] Transcribiendo audio con Gemini (lang: {language})...")
+    segments = gemini_client.transcribe_audio(audio_path, language)
+    print(f"[AudioAnalyzer] Transcripción completada: {len(segments)} segmentos.")
     return segments
 
 def format_time_srt(milliseconds: int) -> str:
@@ -109,15 +75,11 @@ def find_transcript_issues(segments: List[Dict[str, Any]]) -> Tuple[List[Dict[st
                 
     return keywords_found, fillers_found
 
-def process_audio(audio_path: str, settings: Dict[str, Any], whisper_model: Any, vad_model: Any) -> Tuple[Dict[str, List], str, str]:
+def process_audio(audio_path: str, settings: Dict[str, Any]) -> Tuple[Dict[str, List], str, str]:
     """Orquestador principal para todas las tareas de audio."""
-    
-    # 1. Ejecutar VAD (actualmente simulado para procesar todo)
-    # speech_chunks = get_speech_timestamps(audio_path, vad_model)
-    
-    # 2. Ejecutar Whisper
-    # El 90% es ES/EN, Whisper `large-v3` detecta el idioma automáticamente
-    whisper_segments = run_whisper(audio_path, whisper_model, language="auto")
+
+    # 1. Transcribir audio con Gemini
+    whisper_segments = run_whisper(audio_path, language="auto")
     
     # 3. Generar transcripción completa y SRT
     full_transcript = " ".join([s["text"] for s in whisper_segments])

@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+pydub
+opencv-python-headless
+ffmpeg-python
+scikit-image
+numpy
+pyspellchecker
+google-genai

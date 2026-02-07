@@ -1,0 +1,22 @@
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Models (too large for git)
+backend/models/
+
+# IDE / Debug
+backend/debug_vision_input.jpg
+
+# Vercel
+frontend/.vercel/
+
+# Test assets (large videos)
+Assets/
+
+# Claude
+.claude/

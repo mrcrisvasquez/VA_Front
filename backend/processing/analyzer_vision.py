@@ -3,26 +3,7 @@ import numpy as np
 import os
 from typing import Dict, Any, List
 from spellchecker import SpellChecker
-
-def apply_clahe(image: np.ndarray) -> np.ndarray:
-    """
-    Aplica CLAHE (Contrast Limited Adaptive Histogram Equalization) al canal de Luminosidad.
-    Esto 'despega' el texto del fondo en imágenes con mucho brillo o bajo contraste.
-    """
-    try:
-        # 1. Convertir a LAB (Luminosidad, A, B)
-        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        
-        # 2. Aplicar CLAHE al canal L
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        cl = clahe.apply(l)
-        
-        # 3. Fusionar y volver a BGR
-        limg = cv2.merge((cl, a, b))
-        return cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-    except Exception:
-        return image # Fallback seguro
+from . import gemini_client
 
 def normalize_box(box_points: List[List[float]], img_width: int, img_height: int) -> List[float]:
     """Convierte bbox absoluta a relativa [ymin, xmin, ymax, xmax]."""
@@ -38,76 +19,20 @@ def normalize_box(box_points: List[List[float]], img_width: int, img_height: int
     except Exception:
         return [0,0,0,0]
 
-def apply_adaptive_threshold(image: np.ndarray) -> np.ndarray:
-    """Intenta binarizar la imagen para separar texto del fondo."""
-    try:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # Adaptive Threshold para manejar iluminación variable
-        return cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    except Exception:
-        return image
-
-def apply_invert(image: np.ndarray) -> np.ndarray:
-    """Invierte los colores (Negativo) para texto claro sobre fondo claro."""
-    try:
-        return cv2.bitwise_not(image)
-    except Exception:
-        return image
-
-def get_text_and_boxes_from_frame(frame: np.ndarray, ocr_model: Any, excluded_words: List[str]) -> Dict[str, Any]:
+def get_text_and_boxes_from_frame(frame: np.ndarray, excluded_words: List[str]) -> Dict[str, Any]:
     """
-    Analiza un frame con EasyOCR implementando estrategias robustas de recuperación.
-    Estrategias:
-    1. CLAHE (Mejora contraste local) - Defecto
-    2. Upscale (Si es pequeño)
-    3. Adaptive Threshold (Binarización estricta)
-    4. Invert (Negativo, para texto blanco/claro)
+    Analiza un frame con Gemini 2.0 Flash OCR.
+    Gemini handles preprocessing internally, so no CLAHE/upscale strategies needed.
     """
     height, width = frame.shape[:2]
-    result = None
     lines_found = []
-    
-    # Lista de diccionarios con estrategias
-    # (Nombre, Función de proceso, Flag de rescate)
-    strategies = [
-        ("Base (CLAHE)", lambda img: apply_clahe(img), False),
-    ]
-    
-    # Si es pequeño (<2000px), el upscale es una estrategia válida
-    if width < 2000:
-        strategies.append(("Upscale 2x", lambda img: cv2.resize(apply_clahe(img), (width*2, height*2), interpolation=cv2.INTER_CUBIC), True))
-    
-    # Estrategias extremas para bajo contraste
-    strategies.append(("Adaptive Threshold", lambda img: apply_adaptive_threshold(img), False))
-    strategies.append(("Invert (Negative)", lambda img: apply_invert(frame), False))
 
-    used_strategy_scale = 1.0 # Para reconstruir coordenadas
-
-    for name, transform_fn, is_upscale in strategies:
-        try:
-            # Si ya encontramos algo en una iteración anterior, paramos?
-            # En este caso asumimos que si falló el primero, intentamos el segundo.
-            if lines_found: 
-                break
-
-            processed_frame = transform_fn(frame)
-            if processed_frame is None: continue
-            
-            # Ajustar escala para normalización posterior
-            curr_h, curr_w = processed_frame.shape[:2]
-            
-            ocr_res = ocr_model.readtext(processed_frame)
-            
-            if ocr_res:
-                print(f"[Vision] Texto detectado con estrategia: {name}")
-                lines_found = ocr_res
-                height, width = curr_h, curr_w # Actualizar para normalizar cajas
-                break # Éxito
-            
-        except Exception as e:
-            print(f"[Vision] Falló estrategia {name}: {e}")
-
-    # Procesamiento de resultados
+    try:
+        lines_found = gemini_client.ocr_frame(frame)
+        if lines_found:
+            print(f"[Vision] Gemini OCR detectó {len(lines_found)} elementos.")
+    except Exception as e:
+        print(f"[Vision] Error en Gemini OCR: {e}")
 
     # Procesamiento de resultados
     ocr_results = []
@@ -138,9 +63,6 @@ def get_text_and_boxes_from_frame(frame: np.ndarray, ocr_model: Any, excluded_wo
     
     # Normalizar lista de excluidos
     excluded_set = set(w.lower().strip() for w in excluded_words if w.strip())
-
-    if lines_found:
-        print(f"[Vision] EasyOCR detectó {len(lines_found)} elementos (tras optimización).")
 
     for i, detection in enumerate(lines_found):
         try:

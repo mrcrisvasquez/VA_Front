@@ -1,0 +1,8 @@
+models
+venv
+.git
+.gitignore
+__pycache__
+.env
+*.mp4
+*.mov

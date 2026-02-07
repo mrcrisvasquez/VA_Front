@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://va-backend-437207240188.us-central1.run.app/api/:path*" }
+  ]
+}

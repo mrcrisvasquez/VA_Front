@@ -1,7 +1,6 @@
 import json
-import base64
-from llama_cpp import Llama
 from typing import Dict, Any, List
+from . import gemini_client
 
 # --- PROMPT MEJORADO PARA QWEN2.5 ---
 # Más directo, sin system message elaborado, instrucciones claras
@@ -67,45 +66,33 @@ def format_silence_data_for_prompt(silence_data: List[Dict[str, Any]]) -> str:
 
 
 def compare_audio_to_video(
-    whisper_segments: List[Dict[str, Any]], 
-    ocr_data: List[Dict[str, Any]], 
-    silence_data: List[Dict[str, Any]],
-    qwen_model: Llama 
+    whisper_segments: List[Dict[str, Any]],
+    ocr_data: List[Dict[str, Any]],
+    silence_data: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
-    """Usa Qwen para comparar audio y video."""
-    
+    """Usa Gemini para comparar audio y video."""
+
     if not whisper_segments and not ocr_data and not silence_data:
         return []
 
     print("[SynthesisAnalyzer] Ejecutando inferencia de síntesis...")
-    
+
     prompt = SYNTHESIS_PROMPT_TEMPLATE.format(
         audio_segments_str=format_audio_segments_for_prompt(whisper_segments),
         silence_data=format_silence_data_for_prompt(silence_data),
         ocr_data=format_ocr_data_for_prompt(ocr_data)
     )
-    
+
     try:
-        # Llamada directa sin chat_format para mejor control
-        response = qwen_model.create_chat_completion(
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=500,
-            temperature=0.1,  # Muy baja para respuestas determinísticas
-            top_p=0.9,
-            repeat_penalty=1.1
-        )
-        
-        response_text = response['choices'][0]['message']['content'].strip()
-        print(f"[Synthesis] Respuesta Qwen: {response_text[:150]}...")
+        response_text = gemini_client.synthesis_compare(prompt)
+        print(f"[Synthesis] Respuesta Gemini: {response_text[:150]}...")
         
         findings = []
         
         # Detectar si el modelo ignoró las instrucciones
         ignore_phrases = ["Hello", "How can I", "I'm here to", "Hola", "¿En qué puedo"]
         if any(phrase in response_text for phrase in ignore_phrases):
-            print("[Synthesis] ADVERTENCIA: Qwen respondió como chatbot. Ignorando respuesta.")
+            print("[Synthesis] ADVERTENCIA: Modelo respondió como chatbot. Ignorando respuesta.")
             return []
 
         # Parser de respuesta
@@ -148,7 +135,7 @@ def compare_audio_to_video(
         return findings
 
     except Exception as e:
-        print(f"[SynthesisAnalyzer] Error en Qwen: {e}")
+        print(f"[SynthesisAnalyzer] Error en Gemini: {e}")
         return []
 
 
@@ -215,22 +202,14 @@ El JSON debe tener esta estructura exacta:
   "conclusion": "Resumen objetivo."
 }"""
 
-def analyze_image_quantifier(image_path: str, qwen_model: Any, technical_context: str = "") -> Dict[str, Any]:
+def analyze_image_quantifier(image_path: str, technical_context: str = "") -> Dict[str, Any]:
     """
-    Ejecuta el análisis visual de 5 ejes utilizando Qwen-VL.
+    Ejecuta el análisis visual de 5 ejes utilizando Gemini 2.0 Flash.
     Inyecta contexto técnico (errores) para ajustar la puntuación.
     """
     print(f"[Quantifier] Iniciando análisis visual 5-Ejes para: {image_path}")
-    
-    if not qwen_model:
-        print("[Quantifier] Error: Modelo Qwen no disponible.")
-        return {"error": "Modelo no cargado"}
 
     try:
-        # Codificar imagen a base64
-        with open(image_path, "rb") as image_file:
-            base64_image = base64.b64encode(image_file.read()).decode('utf-8')
-
         # Inyección de Contexto
         final_prompt = QUANTIFIER_USER_PROMPT
         if technical_context:
@@ -245,40 +224,10 @@ Si el reporte técnico indica errores de Contraste o Alineación, DEBES penaliza
 
 {QUANTIFIER_USER_PROMPT}"""
 
-        # Inferencia Multimodal
-        response = qwen_model.create_chat_completion(
-            messages=[
-                {
-                    "role": "system",
-                    "content": QUANTIFIER_SYSTEM_PROMPT
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": final_prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]
-                }
-            ],
-            max_tokens=600,
-            temperature=0.2, # Baja temperatura para JSON consistente
-        )
-
-        content = response['choices'][0]['message']['content']
-        print(f"[Quantifier] Respuesta RAW: {content[:100]}...")
-
-        # Limpieza de Markdown si es necesario
-        content = content.replace("```json", "").replace("```", "").strip()
-        
-        # Parsear JSON
-        data = json.loads(content)
+        data = gemini_client.quantifier_analyze(image_path, QUANTIFIER_SYSTEM_PROMPT, final_prompt)
+        print(f"[Quantifier] Análisis completado.")
         return data
 
     except Exception as e:
         print(f"[Quantifier] Error generando reporte: {e}")
         return {"error": str(e)}
-        # Leftover from when function returned list of findings instead of dict
-        # return [{
-        #     "type": "synthesis",
-        #     "issue": f"Error de análisis: {str(e)}"
-        # }]
